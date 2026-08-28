@@ -81,6 +81,23 @@ export interface ExportBundle {
   epic_app_ids: string[];
 }
 
+export interface AuthStatus {
+  setup_required: boolean;
+  authenticated: boolean;
+}
+
+export interface ServiceSchedule {
+  enabled: boolean;
+  hour: number;
+  minute: number;
+}
+
+export interface ScheduleConfig {
+  steam: ServiceSchedule;
+  battlenet: ServiceSchedule;
+  epic: ServiceSchedule;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -88,7 +105,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    let detail: string | null = null;
+    try {
+      const parsed = JSON.parse(body);
+      if (typeof parsed?.detail === "string") detail = parsed.detail;
+    } catch {
+      // not JSON -- fall through, detail stays null
+    }
+    throw new Error(detail ?? `${res.status} ${res.statusText}: ${body}`);
   }
   return res.json() as Promise<T>;
 }
@@ -127,6 +151,17 @@ export const api = {
   exportSelection: () => request<ExportBundle>("/api/export"),
   importSelection: (bundle: ExportBundle) =>
     request<ExportBundle>("/api/import", { method: "POST", body: JSON.stringify(bundle) }),
+
+  authStatus: () => request<AuthStatus>("/api/auth/status"),
+  authSetup: (username: string, password: string) =>
+    request<{ ok: boolean }>("/api/auth/setup", { method: "POST", body: JSON.stringify({ username, password }) }),
+  authLogin: (username: string, password: string) =>
+    request<{ ok: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  authLogout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+
+  getSchedule: () => request<ScheduleConfig>("/api/schedule"),
+  saveSchedule: (partial: Partial<ScheduleConfig>) =>
+    request<ScheduleConfig>("/api/schedule", { method: "POST", body: JSON.stringify(partial) }),
 };
 
 export function prefillStreamUrl(service: "steam" | "battlenet" | "epic"): string {

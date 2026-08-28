@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { TrafficChart } from "@/components/TrafficChart";
 import { api, type DashboardStats, type HealthStatus, type RunHistoryEntry } from "@/lib/api";
 import { formatBytes, formatPercent, formatUptime } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 const SERVICE_LABEL: Record<string, string> = {
   steam: "Steam",
@@ -24,6 +25,7 @@ const SERVICE_LABEL: Record<string, string> = {
 };
 
 export function Dashboard() {
+  const { t } = useI18n();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -68,7 +70,7 @@ export function Dashboard() {
   }
 
   if (!stats) {
-    return <div className="text-sm text-[var(--muted)]">Lade Statistiken…</div>;
+    return <div className="text-sm text-[var(--muted)]">{t("dashboard.loading")}</div>;
   }
 
   const { overall, services, recent_activity, timeline } = stats;
@@ -76,29 +78,29 @@ export function Dashboard() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-[var(--muted)]">Überblick über deinen LanCache</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("dashboard.title")}</h1>
+        <p className="text-sm text-[var(--muted)]">{t("dashboard.subtitle")}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={<Gauge className="h-4 w-4" />}
-          label="Trefferquote"
+          label={t("dashboard.stat.hitRatio")}
           value={formatPercent(overall.hit_ratio)}
         />
         <StatCard
           icon={<CheckCircle2 className="h-4 w-4" />}
-          label="Aus Cache bedient"
+          label={t("dashboard.stat.fromCache")}
           value={formatBytes(overall.hit_bytes)}
         />
         <StatCard
           icon={<ArrowDownCircle className="h-4 w-4" />}
-          label="Neu heruntergeladen"
+          label={t("dashboard.stat.newlyDownloaded")}
           value={formatBytes(overall.miss_bytes)}
         />
         <StatCard
           icon={<Gauge className="h-4 w-4" />}
-          label="Anfragen gesamt"
+          label={t("dashboard.stat.totalRequests")}
           value={overall.total_requests.toLocaleString("de-DE")}
         />
       </div>
@@ -107,10 +109,10 @@ export function Dashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Server className="h-4 w-4" /> Systemstatus
+              <Server className="h-4 w-4" /> {t("dashboard.systemStatus")}
             </CardTitle>
             <Button variant="outline" size="sm" onClick={handleClearCache} disabled={clearing}>
-              <Trash2 className="h-3.5 w-3.5" /> {clearing ? "Leert…" : "Gesamten Cache leeren"}
+              <Trash2 className="h-3.5 w-3.5" /> {clearing ? t("dashboard.clearingCache") : t("dashboard.clearCache")}
             </Button>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
@@ -141,7 +143,7 @@ export function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <History className="h-4 w-4" /> Download-Verlauf
+              <History className="h-4 w-4" /> {t("dashboard.runHistory")}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -169,7 +171,7 @@ export function Dashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Traffic-Verlauf</CardTitle>
+          <CardTitle>{t("dashboard.trafficTimeline")}</CardTitle>
         </CardHeader>
         <CardContent>
           <TrafficChart data={timeline} />
@@ -178,11 +180,11 @@ export function Dashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Traffic pro Dienst</CardTitle>
+          <CardTitle>{t("dashboard.trafficPerService")}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {services.length === 0 && (
-            <p className="text-sm text-[var(--muted)]">Noch keine Download-Aktivität aufgezeichnet.</p>
+            <p className="text-sm text-[var(--muted)]">{t("dashboard.noActivity")}</p>
           )}
           {services.map((s) => (
             <div key={s.service} className="flex flex-col gap-1.5">
@@ -205,11 +207,11 @@ export function Dashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Letzte Aktivität</CardTitle>
+          <CardTitle>{t("dashboard.recentActivity")}</CardTitle>
         </CardHeader>
         <CardContent>
           {recent_activity.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">Keine Aktivität in den letzten Log-Einträgen.</p>
+            <p className="text-sm text-[var(--muted)]">{t("dashboard.noRecentActivity")}</p>
           ) : (
             <div className="flex flex-col divide-y divide-[var(--border)]">
               {recent_activity.map((a, i) => (

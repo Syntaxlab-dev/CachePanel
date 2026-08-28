@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { prefillStreamUrl } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 const SERVICE_LABEL: Record<string, string> = {
   steam: "Steam",
@@ -14,6 +15,7 @@ const SERVICE_LABEL: Record<string, string> = {
 /** "Jetzt herunterladen" button + live SSE log panel. Shared across
  * Steam/BattleNet/Epic since they all trigger the same kind of run. */
 export function PrefillRunPanel({ service }: { service: "steam" | "battlenet" | "epic" }) {
+  const { t } = useI18n();
   const [running, setRunning] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -62,14 +64,14 @@ export function PrefillRunPanel({ service }: { service: "steam" | "battlenet" | 
   return (
     <div className="flex flex-col gap-3">
       <Button variant="outline" onClick={start} disabled={running}>
-        <Download className="h-4 w-4" /> {running ? "Läuft…" : "Jetzt herunterladen"}
+        <Download className="h-4 w-4" /> {running ? t("prefill.running") : t("prefill.runNow")}
       </Button>
 
       {lines.length > 0 && (
         <div className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
           <div className="flex items-center gap-2 text-xs font-medium text-[var(--muted)]">
             <Terminal className="h-3.5 w-3.5" />
-            Live-Log
+            {t("prefill.liveLog")}
             {running && <Badge variant="accent">läuft</Badge>}
           </div>
           <div className="max-h-56 overflow-y-auto rounded-md bg-[var(--bg)] p-2 font-mono text-xs text-[var(--ink)]">

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Toaster } from "sonner";
 import {
   LayoutDashboard,
   Gamepad2,
@@ -10,20 +9,25 @@ import {
   Settings as SettingsIcon,
   Sun,
   Moon,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getPreferredTheme, setTheme, type Theme } from "@/lib/theme";
-
-const NAV_ITEMS = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/steam", label: "Steam", icon: Gamepad2 },
-  { to: "/battlenet", label: "Battle.net", icon: Swords },
-  { to: "/epic", label: "Epic Games", icon: Rocket },
-  { to: "/settings", label: "Einstellungen", icon: SettingsIcon },
-];
+import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 export function Layout() {
   const [theme, setThemeState] = useState<Theme>(() => getPreferredTheme());
+  const { logout } = useAuth();
+  const { t, lang, setLang } = useI18n();
+
+  const NAV_ITEMS = [
+    { to: "/", label: t("nav.dashboard"), icon: LayoutDashboard, end: true },
+    { to: "/steam", label: t("nav.steam"), icon: Gamepad2 },
+    { to: "/battlenet", label: t("nav.battlenet"), icon: Swords },
+    { to: "/epic", label: t("nav.epic"), icon: Rocket },
+    { to: "/settings", label: t("nav.settings"), icon: SettingsIcon },
+  ];
 
   function toggleTheme() {
     const next: Theme = theme === "dark" ? "light" : "dark";
@@ -33,17 +37,6 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen bg-[var(--bg)] text-[var(--ink)]">
-      <Toaster
-        theme={theme}
-        position="bottom-right"
-        toastOptions={{
-          style: {
-            background: "var(--surface)",
-            color: "var(--ink)",
-            border: "1px solid var(--border)",
-          },
-        }}
-      />
       <aside className="flex w-60 flex-col border-r border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="mb-8 flex items-center justify-between gap-2 px-2">
           <div className="flex items-center gap-2">
@@ -52,14 +45,24 @@ export function Layout() {
             </div>
             <span className="text-base font-semibold tracking-tight">CachePanel</span>
           </div>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Zu hellem Modus wechseln" : "Zu dunklem Modus wechseln"}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
-          >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setLang(lang === "de" ? "en" : "de")}
+              aria-label="Sprache wechseln / Switch language"
+              className="flex h-7 w-9 items-center justify-center rounded-md text-xs font-semibold text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+            >
+              {lang === "de" ? "DE" : "EN"}
+            </button>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Zu hellem Modus wechseln" : "Zu dunklem Modus wechseln"}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         <nav className="flex flex-col gap-1">
@@ -83,14 +86,21 @@ export function Layout() {
           ))}
         </nav>
 
-        <div className="mt-auto px-2 pt-4 text-xs text-[var(--muted)]">
+        <div className="mt-auto flex flex-col gap-3 px-2 pt-4">
+          <button
+            type="button"
+            onClick={logout}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+          >
+            <LogOut className="h-4 w-4" /> {t("nav.logout")}
+          </button>
           <a
             href="https://github.com/Syntaxlab-dev/CachePanel"
             target="_blank"
             rel="noreferrer"
-            className="hover:text-[var(--ink)]"
+            className="px-1 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
           >
-            CachePanel — open source
+            {t("nav.opensource")}
           </a>
         </div>
       </aside>

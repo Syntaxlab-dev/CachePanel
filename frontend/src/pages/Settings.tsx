@@ -4,9 +4,12 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ScheduleCard } from "@/components/ScheduleCard";
 import { api, type AppSettings, type ExportBundle } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 export function Settings() {
+  const { t } = useI18n();
   const [values, setValues] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -86,17 +89,16 @@ export function Settings() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Einstellungen</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("settings.title")}</h1>
         <p className="text-sm text-[var(--muted)]">
-          Deine Zugangsdaten bleiben ausschließlich auf diesem Server gespeichert — sie werden nirgendwo sonst
-          hinterlegt oder geteilt.
+          {t("settings.subtitle")}
         </p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4" /> Steam
+            <KeyRound className="h-4 w-4" /> {t("settings.steamCard")}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -113,7 +115,7 @@ export function Settings() {
 
           <a href="/api/auth/steam/login" className="mb-5 block">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
-              <LogIn className="h-4 w-4" /> Mit Steam anmelden
+              <LogIn className="h-4 w-4" /> {t("settings.steamLogin")}
             </Button>
           </a>
           <p className="mb-5 text-xs text-[var(--muted)]">
@@ -175,7 +177,7 @@ export function Settings() {
 
               <div className="flex items-center gap-3">
                 <Button type="submit" disabled={saving}>
-                  {saving ? "Speichert…" : "Speichern"}
+                  {saving ? t("settings.saving") : t("settings.save")}
                 </Button>
               </div>
             </form>
@@ -189,9 +191,11 @@ export function Settings() {
         </CardContent>
       </Card>
 
+      <ScheduleCard />
+
       <Card>
         <CardHeader>
-          <CardTitle>Auswahl exportieren / importieren</CardTitle>
+          <CardTitle>{t("settings.exportImport")}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <p className="text-xs text-[var(--muted)]">
@@ -200,10 +204,10 @@ export function Settings() {
           </p>
           <div className="flex items-center gap-2">
             <Button type="button" variant="outline" onClick={handleExport}>
-              <Download className="h-4 w-4" /> Exportieren
+              <Download className="h-4 w-4" /> {t("settings.export")}
             </Button>
             <Button type="button" variant="outline" onClick={handleImportClick} disabled={importing}>
-              <Upload className="h-4 w-4" /> {importing ? "Importiert…" : "Importieren"}
+              <Upload className="h-4 w-4" /> {importing ? t("settings.importing") : t("settings.import")}
             </Button>
             <input
               ref={fileInputRef}

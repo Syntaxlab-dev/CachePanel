@@ -10,8 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { PrefillRunPanel } from "@/components/PrefillRunPanel";
 import { api, type SteamGame } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 export function Steam() {
+  const { t } = useI18n();
   const [games, setGames] = useState<SteamGame[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -116,7 +118,7 @@ export function Steam() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Steam</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("steam.title")}</h1>
           <p className="text-sm text-[var(--muted)]">
             {games ? `${games.length} Spiele in deiner Bibliothek · ${selected.size} ausgewählt` : "Lade Bibliothek…"}
             {totalSize && <span className="ml-2 text-[var(--ink)]">· {totalSize} gesamt</span>}
@@ -124,10 +126,10 @@ export function Steam() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={handleLoadSizes} disabled={loadingSizes}>
-            <HardDrive className="h-4 w-4" /> {loadingSizes ? "Ermittle Größen…" : "Downloadgrößen laden"}
+            <HardDrive className="h-4 w-4" /> {loadingSizes ? t("steam.loadingSizes") : t("steam.loadSizes")}
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            <Save className="h-4 w-4" /> {saving ? "Speichert…" : "Auswahl speichern"}
+            <Save className="h-4 w-4" /> {saving ? t("steam.saving") : t("steam.save")}
           </Button>
         </div>
       </div>
@@ -138,7 +140,7 @@ export function Steam() {
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
           <Input
-            placeholder="Spiel suchen…"
+            placeholder={t("steam.search")}
             className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -147,9 +149,9 @@ export function Steam() {
         <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-0.5">
           {(
             [
-              ["name", "A–Z"],
-              ["playtime", "Spielzeit"],
-              ["recent", "Zuletzt gespielt"],
+              ["name", t("steam.sort.name")],
+              ["playtime", t("steam.sort.playtime")],
+              ["recent", t("steam.sort.recent")],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -168,10 +170,10 @@ export function Steam() {
           ))}
         </div>
         <Button variant="outline" size="sm" onClick={selectAllFiltered}>
-          <CheckSquare className="h-3.5 w-3.5" /> {search ? "Treffer auswählen" : "Alle auswählen"}
+          <CheckSquare className="h-3.5 w-3.5" /> {search ? t("steam.selectAllMatches") : t("steam.selectAll")}
         </Button>
         <Button variant="outline" size="sm" onClick={deselectAllFiltered}>
-          <Square className="h-3.5 w-3.5" /> {search ? "Treffer abwählen" : "Alle abwählen"}
+          <Square className="h-3.5 w-3.5" /> {search ? t("steam.deselectAllMatches") : t("steam.deselectAll")}
         </Button>
       </div>
 
@@ -197,7 +199,7 @@ export function Steam() {
               </label>
             ))}
             {games && filtered.length === 0 && (
-              <p className="px-4 py-6 text-sm text-[var(--muted)]">Keine Treffer für "{search}".</p>
+              <p className="px-4 py-6 text-sm text-[var(--muted)]">{t("steam.noResults")}: "{search}"</p>
             )}
           </div>
         </CardContent>

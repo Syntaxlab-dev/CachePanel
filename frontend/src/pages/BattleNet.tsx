@@ -6,8 +6,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { PrefillRunPanel } from "@/components/PrefillRunPanel";
 import { api, type BattleNetProductDto } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 export function BattleNet() {
+  const { t } = useI18n();
   const [products, setProducts] = useState<BattleNetProductDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -72,7 +74,7 @@ export function BattleNet() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Battle.net</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("battlenet.title")}</h1>
           <p className="text-sm text-[var(--muted)]">
             {products
               ? `${products.length} Produkte verfügbar · ${selected.size} ausgewählt`
@@ -81,7 +83,7 @@ export function BattleNet() {
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={handleSave} disabled={saving}>
-            <Save className="h-4 w-4" /> {saving ? "Speichert…" : "Auswahl speichern"}
+            <Save className="h-4 w-4" /> {saving ? t("settings.saving") : t("battlenet.save")}
           </Button>
         </div>
       </div>
@@ -91,10 +93,10 @@ export function BattleNet() {
       {products && products.length > 0 && (
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={selectAll}>
-            <CheckSquare className="h-3.5 w-3.5" /> Alle auswählen
+            <CheckSquare className="h-3.5 w-3.5" /> {t("battlenet.selectAll")}
           </Button>
           <Button variant="outline" size="sm" onClick={selectNone}>
-            <Square className="h-3.5 w-3.5" /> Alle abwählen
+            <Square className="h-3.5 w-3.5" /> {t("battlenet.deselectAll")}
           </Button>
         </div>
       )}
