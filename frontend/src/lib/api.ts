@@ -1,0 +1,78 @@
+export interface ServiceStat {
+  service: string;
+  hit_bytes: number;
+  miss_bytes: number;
+  total_bytes: number;
+  hit_ratio: number;
+  last_seen: string | null;
+}
+
+export interface ActivityBucket {
+  service: string;
+  bucket_start: string;
+  hit_bytes: number;
+  miss_bytes: number;
+  requests: number;
+}
+
+export interface DashboardStats {
+  overall: {
+    total_requests: number;
+    hit_requests: number;
+    miss_requests: number;
+    hit_ratio: number;
+    hit_bytes: number;
+    miss_bytes: number;
+    bandwidth_saved_bytes: number;
+  };
+  services: ServiceStat[];
+  recent_activity: ActivityBucket[];
+}
+
+export interface SteamGame {
+  app_id: number;
+  name: string;
+  playtime_minutes: number;
+  icon_url: string | null;
+  selected: boolean;
+}
+
+export interface BattleNetProductDto {
+  code: string;
+  name: string;
+  publisher: string;
+  selected: boolean;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  dashboardStats: () => request<DashboardStats>("/api/dashboard/stats"),
+
+  steamLibrary: () => request<{ games: SteamGame[] }>("/api/steam/library"),
+  saveSteamSelection: (appIds: number[]) =>
+    request("/api/steam/selection", { method: "POST", body: JSON.stringify({ app_ids: appIds }) }),
+
+  battlenetCatalog: () => request<{ products: BattleNetProductDto[] }>("/api/battlenet/catalog"),
+  saveBattlenetSelection: (codes: string[]) =>
+    request("/api/battlenet/selection", { method: "POST", body: JSON.stringify({ codes }) }),
+
+  epicSelection: () => request<{ app_ids: string[] }>("/api/epic/selection"),
+  saveEpicSelection: (appIds: string[]) =>
+    request("/api/epic/selection", { method: "POST", body: JSON.stringify({ app_ids: appIds }) }),
+
+  runPrefill: (service: "steam" | "battlenet" | "epic") =>
+    request<{ service: string; exit_code: number; output: string }>(`/api/prefill/${service}/run`, {
+      method: "POST",
+    }),
+};
