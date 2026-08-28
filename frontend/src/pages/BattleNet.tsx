@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Download, Save } from "lucide-react";
+import { AlertCircle, CheckSquare, Download, Save, Square } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,6 @@ export function BattleNet() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -39,14 +39,22 @@ export function BattleNet() {
     });
   }
 
+  function selectAll() {
+    if (!products) return;
+    setSelected(new Set(products.map((p) => p.code)));
+  }
+
+  function selectNone() {
+    setSelected(new Set());
+  }
+
   async function handleSave() {
     setSaving(true);
-    setStatusMessage(null);
     try {
       await api.saveBattlenetSelection(Array.from(selected));
-      setStatusMessage(`${selected.size} Produkte gespeichert.`);
+      toast.success(`${selected.size} Produkte gespeichert.`);
     } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
     } finally {
       setSaving(false);
     }
@@ -54,14 +62,15 @@ export function BattleNet() {
 
   async function handleRunNow() {
     setRunning(true);
-    setStatusMessage(null);
     try {
       const result = await api.runPrefill("battlenet");
-      setStatusMessage(
-        result.exit_code === 0 ? "Download gestartet/abgeschlossen." : `Lief mit Exit-Code ${result.exit_code}.`,
-      );
+      if (result.exit_code === 0) {
+        toast.success("Download gestartet/abgeschlossen.");
+      } else {
+        toast.error(`Lief mit Exit-Code ${result.exit_code}.`);
+      }
     } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Download-Start fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : "Download-Start fehlgeschlagen");
     } finally {
       setRunning(false);
     }
@@ -96,9 +105,14 @@ export function BattleNet() {
         </div>
       </div>
 
-      {statusMessage && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-sm">
-          {statusMessage}
+      {products && products.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={selectAll}>
+            <CheckSquare className="h-3.5 w-3.5" /> Alle auswählen
+          </Button>
+          <Button variant="outline" size="sm" onClick={selectNone}>
+            <Square className="h-3.5 w-3.5" /> Alle abwählen
+          </Button>
         </div>
       )}
 

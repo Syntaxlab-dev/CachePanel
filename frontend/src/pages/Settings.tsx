@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { AlertCircle, CheckCircle2, KeyRound, LogIn } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,6 @@ export function Settings() {
   const [values, setValues] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [loginNotice, setLoginNotice] = useState<"success" | "failed" | null>(null);
 
   useEffect(() => {
@@ -30,14 +30,12 @@ export function Settings() {
     e.preventDefault();
     if (!values) return;
     setSaving(true);
-    setSaved(false);
-    setError(null);
     try {
       const updated = await api.saveSettings(values);
       setValues(updated);
-      setSaved(true);
+      toast.success("Einstellungen gespeichert.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
     } finally {
       setSaving(false);
     }
@@ -137,11 +135,6 @@ export function Settings() {
                 <Button type="submit" disabled={saving}>
                   {saving ? "Speichert…" : "Speichern"}
                 </Button>
-                {saved && (
-                  <span className="flex items-center gap-1.5 text-sm text-[var(--ok)]">
-                    <CheckCircle2 className="h-4 w-4" /> Gespeichert.
-                  </span>
-                )}
               </div>
             </form>
           )}

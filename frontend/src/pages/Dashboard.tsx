@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowDownCircle, CheckCircle2, Gauge } from "lucide-react";
+import { AlertCircle, ArrowDownCircle, CheckCircle2, Gauge, Server, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { api, type DashboardStats } from "@/lib/api";
-import { formatBytes, formatPercent } from "@/lib/utils";
+import { api, type DashboardStats, type HealthStatus } from "@/lib/api";
+import { formatBytes, formatPercent, formatUptime } from "@/lib/utils";
 
 export function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
 
   useEffect(() => {
     api
       .dashboardStats()
       .then(setStats)
       .catch((err) => setError(err instanceof Error ? err.message : "Unbekannter Fehler"));
+    api.health().then(setHealth).catch(() => setHealth(null));
   }, []);
 
   if (error) {
@@ -59,6 +61,37 @@ export function Dashboard() {
           value={overall.total_requests.toLocaleString("de-DE")}
         />
       </div>
+
+      {health && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Server className="h-4 w-4" /> Systemstatus
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {health.containers.map((c) => {
+              const running = c.status === "running";
+              return (
+                <div key={c.name} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    {running ? (
+                      <CheckCircle2 className="h-4 w-4 text-[var(--ok)]" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-[var(--danger)]" />
+                    )}
+                    <span className="font-medium">{c.name}</span>
+                  </div>
+                  <span className="text-[var(--muted)]">
+                    {running ? "läuft" : c.status === "not_found" ? "nicht gefunden" : c.status}
+                    {running && c.uptime_seconds != null && ` · seit ${formatUptime(c.uptime_seconds)}`}
+                  </span>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { AlertCircle, Download, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ export function Epic() {
   const [error, setError] = useState<string | null>(null);
   const [newId, setNewId] = useState("");
   const [running, setRunning] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -21,14 +21,23 @@ export function Epic() {
 
   async function persist(next: string[]) {
     setAppIds(next);
-    await api.saveEpicSelection(next);
+    try {
+      await api.saveEpicSelection(next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
+    }
   }
 
   function handleAdd(e: FormEvent) {
     e.preventDefault();
     const value = newId.trim();
-    if (!value || appIds?.includes(value)) return;
+    if (!value) return;
+    if (appIds?.includes(value)) {
+      toast.error("Ist schon in der Auswahl.");
+      return;
+    }
     persist([...(appIds ?? []), value]);
+    toast.success(`"${value}" hinzugefügt.`);
     setNewId("");
   }
 
@@ -38,14 +47,15 @@ export function Epic() {
 
   async function handleRunNow() {
     setRunning(true);
-    setStatusMessage(null);
     try {
       const result = await api.runPrefill("epic");
-      setStatusMessage(
-        result.exit_code === 0 ? "Download gestartet/abgeschlossen." : `Lief mit Exit-Code ${result.exit_code}.`,
-      );
+      if (result.exit_code === 0) {
+        toast.success("Download gestartet/abgeschlossen.");
+      } else {
+        toast.error(`Lief mit Exit-Code ${result.exit_code}.`);
+      }
     } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Download-Start fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : "Download-Start fehlgeschlagen");
     } finally {
       setRunning(false);
     }
@@ -72,12 +82,6 @@ export function Epic() {
           <Download className="h-4 w-4" /> {running ? "Läuft…" : "Jetzt herunterladen"}
         </Button>
       </div>
-
-      {statusMessage && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-sm">
-          {statusMessage}
-        </div>
-      )}
 
       <Card>
         <CardHeader>

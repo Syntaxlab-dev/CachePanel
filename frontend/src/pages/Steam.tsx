@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Download, Save, Search } from "lucide-react";
+import { AlertCircle, CheckSquare, Download, HardDrive, Save, Search, Square } from "lucide-react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,9 @@ export function Steam() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [sizes, setSizes] = useState<Record<string, string> | null>(null);
+  const [totalSize, setTotalSize] = useState<string | null>(null);
+  const [loadingSizes, setLoadingSizes] = useState(false);
 
   useEffect(() => {
     api
@@ -41,14 +44,29 @@ export function Steam() {
     });
   }
 
+  function selectAllFiltered() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      filtered.forEach((g) => next.add(g.app_id));
+      return next;
+    });
+  }
+
+  function deselectAllFiltered() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      filtered.forEach((g) => next.delete(g.app_id));
+      return next;
+    });
+  }
+
   async function handleSave() {
     setSaving(true);
-    setStatusMessage(null);
     try {
       await api.saveSteamSelection(Array.from(selected));
-      setStatusMessage(`${selected.size} Spiele gespeichert.`);
+      toast.success(`${selected.size} Spiele gespeichert.`);
     } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
     } finally {
       setSaving(false);
     }
@@ -56,16 +74,33 @@ export function Steam() {
 
   async function handleRunNow() {
     setRunning(true);
-    setStatusMessage(null);
     try {
       const result = await api.runPrefill("steam");
-      setStatusMessage(
-        result.exit_code === 0 ? "Download gestartet/abgeschlossen." : `Lief mit Exit-Code ${result.exit_code}.`,
-      );
+      if (result.exit_code === 0) {
+        toast.success("Download gestartet/abgeschlossen.");
+      } else {
+        toast.error(`Lief mit Exit-Code ${result.exit_code}.`);
+      }
     } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Download-Start fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : "Download-Start fehlgeschlagen");
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function handleLoadSizes() {
+    setLoadingSizes(true);
+    try {
+      const result = await api.steamSizeStatus();
+      const map: Record<string, string> = {};
+      result.apps.forEach((a) => (map[a.name] = a.size));
+      setSizes(map);
+      setTotalSize(result.total_size);
+      toast.success("Downloadgrößen geladen.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Größen konnten nicht geladen werden");
+    } finally {
+      setLoadingSizes(false);
     }
   }
 
@@ -89,9 +124,13 @@ export function Steam() {
           <h1 className="text-2xl font-semibold tracking-tight">Steam</h1>
           <p className="text-sm text-[var(--muted)]">
             {games ? `${games.length} Spiele in deiner Bibliothek · ${selected.size} ausgewählt` : "Lade Bibliothek…"}
+            {totalSize && <span className="ml-2 text-[var(--ink)]">· {totalSize} gesamt</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleLoadSizes} disabled={loadingSizes}>
+            <HardDrive className="h-4 w-4" /> {loadingSizes ? "Ermittle Größen…" : "Downloadgrößen laden"}
+          </Button>
           <Button variant="outline" onClick={handleRunNow} disabled={running}>
             <Download className="h-4 w-4" /> {running ? "Läuft…" : "Jetzt herunterladen"}
           </Button>
@@ -101,20 +140,22 @@ export function Steam() {
         </div>
       </div>
 
-      {statusMessage && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-sm">
-          {statusMessage}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
+          <Input
+            placeholder="Spiel suchen…"
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-      )}
-
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
-        <Input
-          placeholder="Spiel suchen…"
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <Button variant="outline" size="sm" onClick={selectAllFiltered}>
+          <CheckSquare className="h-3.5 w-3.5" /> {search ? "Treffer auswählen" : "Alle auswählen"}
+        </Button>
+        <Button variant="outline" size="sm" onClick={deselectAllFiltered}>
+          <Square className="h-3.5 w-3.5" /> {search ? "Treffer abwählen" : "Alle abwählen"}
+        </Button>
       </div>
 
       <Card>
@@ -132,6 +173,7 @@ export function Steam() {
                   <div className="h-8 w-8 rounded bg-[var(--surface-2)]" />
                 )}
                 <span className="flex-1">{game.name}</span>
+                {sizes?.[game.name] && <Badge variant="neutral">{sizes[game.name]}</Badge>}
                 {game.playtime_minutes > 0 && (
                   <Badge variant="neutral">{Math.round(game.playtime_minutes / 60)} Std. gespielt</Badge>
                 )}

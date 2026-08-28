@@ -1,5 +1,8 @@
 # CachePanel
 
+> **Provided as-is, no warranty.** CachePanel is licensed under the [MIT License](LICENSE) —
+> use it at your own risk, the authors accept no liability for any damages arising from its use.
+
 A modern, self-hosted web UI for [LanCache](https://lancache.net/) setups running
 the [tpill90 prefill tools](https://github.com/tpill90) (SteamPrefill, BattleNetPrefill,
 EpicPrefill).
@@ -18,6 +21,8 @@ been cached. CachePanel replaces both of those with one dashboard:
   - **Epic Games**: manual add-by-name (Epic has no public ownership API —
     see [Known limitations](#known-limitations)).
 - **Trigger a download on demand** — no need to wait for the nightly schedule.
+- Dark mode, per-game download sizes (Steam), and a live health check for the
+  core LanCache containers.
 
 ![Dashboard screenshot](docs/screenshot-dashboard.png)
 <!-- Add real screenshots here once deployed: dashboard, steam, battlenet, epic -->
@@ -63,6 +68,17 @@ socket (to trigger an on-demand `prefill` run inside those containers).
   upstream.
 - No authentication on the panel itself — intended for trusted local
   networks, same as the tools it manages.
+
+## Security notes
+
+Your Steam credentials (and anything else stored via the Settings page) are
+encrypted at rest in `data/settings.json`, with the key kept in a separate
+file (`data/.encryption_key`). This protects the settings file if it leaks
+in isolation (e.g. an accidental backup or copy) — it does **not** protect
+against someone who already has root/filesystem access to the host
+CachePanel runs on, since the key lives right next to the data it protects.
+For a single-container self-hosted tool there's no realistic way to clear
+that bar without an external secrets manager, which is out of scope here.
 
 ## License
 

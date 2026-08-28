@@ -49,6 +49,15 @@ export interface AppSettings {
   steam_id64: string;
 }
 
+export interface SteamSizeStatus {
+  apps: { name: string; size: string }[];
+  total_size: string | null;
+}
+
+export interface HealthStatus {
+  containers: { name: string; status: string; uptime_seconds: number | null }[];
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -67,6 +76,7 @@ export const api = {
   steamLibrary: () => request<{ games: SteamGame[] }>("/api/steam/library"),
   saveSteamSelection: (appIds: number[]) =>
     request("/api/steam/selection", { method: "POST", body: JSON.stringify({ app_ids: appIds }) }),
+  steamSizeStatus: () => request<SteamSizeStatus>("/api/steam/size-status"),
 
   battlenetCatalog: () => request<{ products: BattleNetProductDto[] }>("/api/battlenet/catalog"),
   saveBattlenetSelection: (codes: string[]) =>
@@ -84,4 +94,6 @@ export const api = {
   getSettings: () => request<AppSettings>("/api/settings"),
   saveSettings: (partial: Partial<AppSettings>) =>
     request<AppSettings>("/api/settings", { method: "POST", body: JSON.stringify(partial) }),
+
+  health: () => request<HealthStatus>("/api/health"),
 };
