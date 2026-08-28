@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrafficChart } from "@/components/TrafficChart";
+import { OnboardingBanner } from "@/components/OnboardingBanner";
 import { api, type DashboardStats, type HealthStatus, type RunHistoryEntry } from "@/lib/api";
 import { formatBytes, formatPercent, formatUptime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -81,6 +82,8 @@ export function Dashboard() {
         <h1 className="text-2xl font-semibold tracking-tight">{t("dashboard.title")}</h1>
         <p className="text-sm text-[var(--muted)]">{t("dashboard.subtitle")}</p>
       </div>
+
+      <OnboardingBanner />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

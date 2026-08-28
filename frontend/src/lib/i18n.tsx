@@ -35,6 +35,11 @@ const dictionaries = {
     "dashboard.noActivity": "Noch keine Download-Aktivität aufgezeichnet.",
     "dashboard.noRecentActivity": "Keine Aktivität in den letzten Log-Einträgen.",
     "dashboard.loading": "Lade Statistiken…",
+    "dashboard.onboarding.title": "Noch kein Dienst eingerichtet",
+    "dashboard.onboarding.body": "Wähl aus, welche Spiele vorab gecacht werden sollen — Steam braucht kurz deine Zugangsdaten, Battle.net funktioniert sofort.",
+    "dashboard.onboarding.steamLink": "Steam einrichten",
+    "dashboard.onboarding.battlenetLink": "Battle.net öffnen",
+    "dashboard.onboarding.dismiss": "Nicht mehr anzeigen",
 
     "steam.title": "Steam",
     "steam.search": "Spiel suchen…",
@@ -124,6 +129,11 @@ const dictionaries = {
     "dashboard.noActivity": "No download activity recorded yet.",
     "dashboard.noRecentActivity": "No activity in the recent log entries.",
     "dashboard.loading": "Loading stats…",
+    "dashboard.onboarding.title": "No service set up yet",
+    "dashboard.onboarding.body": "Choose which games should be pre-cached — Steam needs your credentials first, Battle.net works right away.",
+    "dashboard.onboarding.steamLink": "Set up Steam",
+    "dashboard.onboarding.battlenetLink": "Open Battle.net",
+    "dashboard.onboarding.dismiss": "Don't show again",
 
     "steam.title": "Steam",
     "steam.search": "Search games…",
