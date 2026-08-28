@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Download, Save, Search } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -70,9 +71,13 @@ export function Steam() {
 
   if (error) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
-        <AlertCircle className="h-4 w-4" /> Steam-Bibliothek konnte nicht geladen werden: {error}
-        <span className="text-[var(--muted)]">(Steam-API-Key/SteamID64 konfiguriert?)</span>
+      <div className="flex flex-col gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-4 w-4" /> Steam-Bibliothek konnte nicht geladen werden: {error}
+        </div>
+        <Link to="/settings" className="w-fit underline underline-offset-2">
+          Zu den Einstellungen →
+        </Link>
       </div>
     );
   }

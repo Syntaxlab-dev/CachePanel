@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { LayoutDashboard, Gamepad2, Swords, Rocket, Database } from "lucide-react";
+import { LayoutDashboard, Gamepad2, Swords, Rocket, Database, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: "/steam", label: "Steam", icon: Gamepad2 },
   { to: "/battlenet", label: "Battle.net", icon: Swords },
   { to: "/epic", label: "Epic Games", icon: Rocket },
+  { to: "/settings", label: "Einstellungen", icon: SettingsIcon },
 ];
 
 export function Layout() {
@@ -43,7 +44,7 @@ export function Layout() {
 
         <div className="mt-auto px-2 pt-4 text-xs text-[var(--muted)]">
           <a
-            href="https://github.com/"
+            href="https://github.com/Syntaxlab-dev/CachePanel"
             target="_blank"
             rel="noreferrer"
             className="hover:text-[var(--ink)]"

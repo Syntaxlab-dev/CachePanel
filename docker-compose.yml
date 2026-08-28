@@ -14,3 +14,4 @@ services:
       - /opt/stacks/battlenet-prefill/config:/opt/stacks/battlenet-prefill/config
       - /opt/stacks/epic-prefill/config:/opt/stacks/epic-prefill/config
       - /mnt/lancache/logs:/mnt/lancache/logs:ro
+      - ./data:/data

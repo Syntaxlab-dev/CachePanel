@@ -44,6 +44,11 @@ export interface BattleNetProductDto {
   selected: boolean;
 }
 
+export interface AppSettings {
+  steam_api_key: string;
+  steam_id64: string;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -75,4 +80,8 @@ export const api = {
     request<{ service: string; exit_code: number; output: string }>(`/api/prefill/${service}/run`, {
       method: "POST",
     }),
+
+  getSettings: () => request<AppSettings>("/api/settings"),
+  saveSettings: (partial: Partial<AppSettings>) =>
+    request<AppSettings>("/api/settings", { method: "POST", body: JSON.stringify(partial) }),
 };
