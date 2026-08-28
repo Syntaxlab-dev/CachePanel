@@ -35,14 +35,15 @@ CachePanel expects to run alongside an existing LanCache + prefill-tools stack
 (see [lancache.net](https://lancache.net/) and the tpill90 prefill tools for
 the base setup — CachePanel doesn't replace those, it drives them).
 
-1. Copy `.env.example` to `.env` and fill in a free
-   [Steam Web API key](https://steamcommunity.com/dev/apikey) and your
-   [SteamID64](https://steamid.io/).
+1. Copy `.env.example` to `.env` (no Steam credentials needed here — see step 4).
 2. Adjust the volume paths in `docker-compose.yml` if your prefill tools'
    config directories or LanCache log directory don't live at the defaults
    (`/opt/stacks/<tool>/config`, `/mnt/lancache/logs`).
 3. `docker compose up -d --build`
-4. Open `http://<host>:8090`.
+4. Open `http://<host>:8090` and go to **Settings** to enter your own free
+   [Steam Web API key](https://steamcommunity.com/dev/apikey) and
+   [SteamID64](https://steamid.io/) — stored locally on your server, never
+   baked into the image or shared with anyone else who might deploy CachePanel.
 
 CachePanel needs read/write access to each prefill tool's config directory
 (to manage the `selectedAppsToPrefill.json` selection file) and to the Docker
