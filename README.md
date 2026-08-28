@@ -66,8 +66,9 @@ socket (to trigger an on-demand `prefill` run inside those containers).
   since Blizzard doesn't expose a per-account ownership API either. Update
   `backend/app/services/battlenet_catalog.py` if new products are added
   upstream.
-- No authentication on the panel itself — intended for trusted local
-  networks, same as the tools it manages.
+- The panel has its own login (set up on first launch), independent of
+  anything else running alongside it — still meant for a trusted home
+  network rather than public exposure, but no longer wide open by default.
 
 ## Security notes
 
