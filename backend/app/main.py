@@ -4,7 +4,19 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import auth, battlenet, dashboard, epic, health, prefill, settings, steam, steam_size
+from app.routers import (
+    auth,
+    battlenet,
+    cache,
+    dashboard,
+    epic,
+    export_import,
+    health,
+    prefill,
+    settings,
+    steam,
+    steam_size,
+)
 
 app = FastAPI(title="CachePanel API")
 
@@ -17,6 +29,8 @@ app.include_router(prefill.router)
 app.include_router(settings.router)
 app.include_router(auth.router)
 app.include_router(health.router)
+app.include_router(cache.router)
+app.include_router(export_import.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 

@@ -1,16 +1,16 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { AlertCircle, Download, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { PrefillRunPanel } from "@/components/PrefillRunPanel";
 import { api } from "@/lib/api";
 
 export function Epic() {
   const [appIds, setAppIds] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newId, setNewId] = useState("");
-  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     api
@@ -45,22 +45,6 @@ export function Epic() {
     persist((appIds ?? []).filter((x) => x !== id));
   }
 
-  async function handleRunNow() {
-    setRunning(true);
-    try {
-      const result = await api.runPrefill("epic");
-      if (result.exit_code === 0) {
-        toast.success("Download gestartet/abgeschlossen.");
-      } else {
-        toast.error(`Lief mit Exit-Code ${result.exit_code}.`);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Download-Start fehlgeschlagen");
-    } finally {
-      setRunning(false);
-    }
-  }
-
   if (error) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
@@ -78,10 +62,9 @@ export function Epic() {
             Epic hat keine öffentliche Bibliotheks-API — App-Namen/IDs manuell eintragen.
           </p>
         </div>
-        <Button variant="outline" onClick={handleRunNow} disabled={running}>
-          <Download className="h-4 w-4" /> {running ? "Läuft…" : "Jetzt herunterladen"}
-        </Button>
       </div>
+
+      <PrefillRunPanel service="epic" />
 
       <Card>
         <CardHeader>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckSquare, Download, HardDrive, Save, Search, Square } from "lucide-react";
+import { AlertCircle, CheckSquare, HardDrive, Save, Search, Square } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PrefillRunPanel } from "@/components/PrefillRunPanel";
 import { api, type SteamGame } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +17,6 @@ export function Steam() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
   const [sizes, setSizes] = useState<Record<string, string> | null>(null);
   const [totalSize, setTotalSize] = useState<string | null>(null);
   const [loadingSizes, setLoadingSizes] = useState(false);
@@ -83,22 +83,6 @@ export function Steam() {
     }
   }
 
-  async function handleRunNow() {
-    setRunning(true);
-    try {
-      const result = await api.runPrefill("steam");
-      if (result.exit_code === 0) {
-        toast.success("Download gestartet/abgeschlossen.");
-      } else {
-        toast.error(`Lief mit Exit-Code ${result.exit_code}.`);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Download-Start fehlgeschlagen");
-    } finally {
-      setRunning(false);
-    }
-  }
-
   async function handleLoadSizes() {
     setLoadingSizes(true);
     try {
@@ -142,14 +126,13 @@ export function Steam() {
           <Button variant="outline" onClick={handleLoadSizes} disabled={loadingSizes}>
             <HardDrive className="h-4 w-4" /> {loadingSizes ? "Ermittle Größen…" : "Downloadgrößen laden"}
           </Button>
-          <Button variant="outline" onClick={handleRunNow} disabled={running}>
-            <Download className="h-4 w-4" /> {running ? "Läuft…" : "Jetzt herunterladen"}
-          </Button>
           <Button onClick={handleSave} disabled={saving}>
             <Save className="h-4 w-4" /> {saving ? "Speichert…" : "Auswahl speichern"}
           </Button>
         </div>
       </div>
+
+      <PrefillRunPanel service="steam" />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1">

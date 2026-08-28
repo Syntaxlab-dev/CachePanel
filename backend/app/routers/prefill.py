@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
-from app.services.prefill_runner import PrefillRunnerError, trigger_prefill
+from app.services import run_history_store
+from app.services.prefill_runner import PrefillRunnerError, resolve_stream_target, stream_prefill, trigger_prefill
 
 router = APIRouter(prefix="/api/prefill", tags=["prefill"])
 
@@ -17,3 +19,28 @@ def run_prefill(service: str):
         "exit_code": result.exit_code,
         "output": result.output,
     }
+
+
+@router.get("/{service}/stream")
+def stream_prefill_run(service: str):
+    """Server-Sent Events endpoint: streams prefill output live as it
+    happens. GET (not POST) so the browser's native EventSource can consume
+    it directly without extra client-side plumbing.
+
+    Resolves the container *before* constructing the StreamingResponse, so
+    an unknown service / missing container becomes a normal HTTP 400 here
+    rather than a broken stream after a 200 has already gone out.
+    """
+    try:
+        client, container, command = resolve_stream_target(service)
+    except PrefillRunnerError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return StreamingResponse(
+        stream_prefill(client, container, command, service), media_type="text/event-stream"
+    )
+
+
+@router.get("/history")
+def get_history():
+    return {"runs": run_history_store.get_history()}

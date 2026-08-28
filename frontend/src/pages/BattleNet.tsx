@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckSquare, Download, Save, Square } from "lucide-react";
+import { AlertCircle, CheckSquare, Save, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { PrefillRunPanel } from "@/components/PrefillRunPanel";
 import { api, type BattleNetProductDto } from "@/lib/api";
 
 export function BattleNet() {
@@ -11,7 +12,6 @@ export function BattleNet() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     api
@@ -60,22 +60,6 @@ export function BattleNet() {
     }
   }
 
-  async function handleRunNow() {
-    setRunning(true);
-    try {
-      const result = await api.runPrefill("battlenet");
-      if (result.exit_code === 0) {
-        toast.success("Download gestartet/abgeschlossen.");
-      } else {
-        toast.error(`Lief mit Exit-Code ${result.exit_code}.`);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Download-Start fehlgeschlagen");
-    } finally {
-      setRunning(false);
-    }
-  }
-
   if (error) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
@@ -96,14 +80,13 @@ export function BattleNet() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleRunNow} disabled={running}>
-            <Download className="h-4 w-4" /> {running ? "Läuft…" : "Jetzt herunterladen"}
-          </Button>
           <Button onClick={handleSave} disabled={saving}>
             <Save className="h-4 w-4" /> {saving ? "Speichert…" : "Auswahl speichern"}
           </Button>
         </div>
       </div>
+
+      <PrefillRunPanel service="battlenet" />
 
       {products && products.length > 0 && (
         <div className="flex items-center gap-2">

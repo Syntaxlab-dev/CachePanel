@@ -1,16 +1,18 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { AlertCircle, CheckCircle2, KeyRound, LogIn } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { AlertCircle, CheckCircle2, Download, KeyRound, LogIn, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { api, type AppSettings } from "@/lib/api";
+import { api, type AppSettings, type ExportBundle } from "@/lib/api";
 
 export function Settings() {
   const [values, setValues] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loginNotice, setLoginNotice] = useState<"success" | "failed" | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     api
@@ -38,6 +40,46 @@ export function Settings() {
       toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleExport() {
+    try {
+      const bundle = await api.exportSelection();
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cachepanel-auswahl-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Auswahl exportiert.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export fehlgeschlagen");
+    }
+  }
+
+  function handleImportClick() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const bundle = JSON.parse(text) as ExportBundle;
+      await api.importSelection(bundle);
+      toast.success("Auswahl importiert. Die einzelnen Seiten beim nächsten Öffnen neu geladen.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? `Import fehlgeschlagen: ${err.message}` : "Import fehlgeschlagen (ungültige Datei)",
+      );
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -144,6 +186,33 @@ export function Settings() {
               <AlertCircle className="h-4 w-4" /> {error}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Auswahl exportieren / importieren</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-xs text-[var(--muted)]">
+            Sichert deine aktuelle Steam-/Battle.net-/Epic-Auswahl als Datei, oder spielt eine zuvor exportierte
+            Datei wieder ein (z. B. für eine andere CachePanel-Instanz).
+          </p>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={handleExport}>
+              <Download className="h-4 w-4" /> Exportieren
+            </Button>
+            <Button type="button" variant="outline" onClick={handleImportClick} disabled={importing}>
+              <Upload className="h-4 w-4" /> {importing ? "Importiert…" : "Importieren"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

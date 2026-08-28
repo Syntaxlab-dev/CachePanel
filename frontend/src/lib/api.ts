@@ -67,6 +67,20 @@ export interface HealthStatus {
   containers: { name: string; status: string; uptime_seconds: number | null }[];
 }
 
+export interface RunHistoryEntry {
+  service: string;
+  started_at: string;
+  exit_code: number;
+  duration_seconds: number;
+}
+
+export interface ExportBundle {
+  schema_version: number;
+  steam_app_ids: number[];
+  battlenet_codes: string[];
+  epic_app_ids: string[];
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -105,4 +119,16 @@ export const api = {
     request<AppSettings>("/api/settings", { method: "POST", body: JSON.stringify(partial) }),
 
   health: () => request<HealthStatus>("/api/health"),
+
+  runHistory: () => request<{ runs: RunHistoryEntry[] }>("/api/prefill/history"),
+
+  clearCache: () => request<{ message: string }>("/api/cache/clear", { method: "POST" }),
+
+  exportSelection: () => request<ExportBundle>("/api/export"),
+  importSelection: (bundle: ExportBundle) =>
+    request<ExportBundle>("/api/import", { method: "POST", body: JSON.stringify(bundle) }),
 };
+
+export function prefillStreamUrl(service: "steam" | "battlenet" | "epic"): string {
+  return `/api/prefill/${service}/stream`;
+}

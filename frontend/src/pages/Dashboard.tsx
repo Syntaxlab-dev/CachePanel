@@ -1,15 +1,34 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowDownCircle, CheckCircle2, Gauge, Server, XCircle } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowDownCircle,
+  CheckCircle2,
+  Gauge,
+  History,
+  Server,
+  Trash2,
+  XCircle,
+} from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { TrafficChart } from "@/components/TrafficChart";
-import { api, type DashboardStats, type HealthStatus } from "@/lib/api";
+import { api, type DashboardStats, type HealthStatus, type RunHistoryEntry } from "@/lib/api";
 import { formatBytes, formatPercent, formatUptime } from "@/lib/utils";
+
+const SERVICE_LABEL: Record<string, string> = {
+  steam: "Steam",
+  battlenet: "Battle.net",
+  epic: "Epic Games",
+};
 
 export function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [history, setHistory] = useState<RunHistoryEntry[] | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     api
@@ -17,7 +36,28 @@ export function Dashboard() {
       .then(setStats)
       .catch((err) => setError(err instanceof Error ? err.message : "Unbekannter Fehler"));
     api.health().then(setHealth).catch(() => setHealth(null));
+    api
+      .runHistory()
+      .then((data) => setHistory(data.runs))
+      .catch(() => setHistory(null));
   }, []);
+
+  async function handleClearCache() {
+    const confirmed = window.confirm(
+      "Wirklich den GESAMTEN Cache leeren? Das betrifft alle Dienste (Steam, Battle.net, Epic, ...), nicht nur einen einzelnen -- eine gezielte Teil-Leerung ist technisch nicht sicher möglich. Bereits gecachte Downloads müssten danach erneut aus dem Internet geladen werden.",
+    );
+    if (!confirmed) return;
+
+    setClearing(true);
+    try {
+      const result = await api.clearCache();
+      toast.success(result.message);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Cache leeren fehlgeschlagen");
+    } finally {
+      setClearing(false);
+    }
+  }
 
   if (error) {
     return (
@@ -65,10 +105,13 @@ export function Dashboard() {
 
       {health && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Server className="h-4 w-4" /> Systemstatus
             </CardTitle>
+            <Button variant="outline" size="sm" onClick={handleClearCache} disabled={clearing}>
+              <Trash2 className="h-3.5 w-3.5" /> {clearing ? "Leert…" : "Gesamten Cache leeren"}
+            </Button>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {health.containers.map((c) => {
@@ -90,6 +133,36 @@ export function Dashboard() {
                 </div>
               );
             })}
+          </CardContent>
+        </Card>
+      )}
+
+      {history && history.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-4 w-4" /> Download-Verlauf
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="flex flex-col divide-y divide-[var(--border)]">
+              {history.map((run, i) => (
+                <div key={i} className="flex items-center justify-between px-5 py-2.5 text-sm">
+                  <div className="flex items-center gap-3">
+                    <Badge variant={run.exit_code === 0 ? "ok" : "warn"}>
+                      {SERVICE_LABEL[run.service] ?? run.service}
+                    </Badge>
+                    <span className="text-[var(--muted)]">
+                      {new Date(run.started_at).toLocaleString("de-DE")}
+                    </span>
+                  </div>
+                  <span className="text-[var(--muted)]">
+                    {run.exit_code === 0 ? "erfolgreich" : `Exit-Code ${run.exit_code}`} ·{" "}
+                    {run.duration_seconds.toFixed(1)}s
+                  </span>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
