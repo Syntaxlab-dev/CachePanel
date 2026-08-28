@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { AlertCircle, CheckCircle2, KeyRound } from "lucide-react";
+import { AlertCircle, CheckCircle2, KeyRound, LogIn } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,20 @@ export function Settings() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [loginNotice, setLoginNotice] = useState<"success" | "failed" | null>(null);
 
   useEffect(() => {
     api
       .getSettings()
       .then(setValues)
       .catch((err) => setError(err instanceof Error ? err.message : "Unbekannter Fehler"));
+
+    const params = new URLSearchParams(window.location.search);
+    const loginResult = params.get("steam_login");
+    if (loginResult === "success" || loginResult === "failed") {
+      setLoginNotice(loginResult);
+      window.history.replaceState({}, "", "/settings");
+    }
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -52,6 +60,27 @@ export function Settings() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {loginNotice === "success" && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-[var(--ok)] bg-[var(--ok-soft)] p-3 text-sm text-[var(--ok)]">
+              <CheckCircle2 className="h-4 w-4" /> Mit Steam angemeldet — SteamID64 wurde automatisch eingetragen.
+            </div>
+          )}
+          {loginNotice === "failed" && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]">
+              <AlertCircle className="h-4 w-4" /> Steam-Anmeldung fehlgeschlagen, bitte erneut versuchen.
+            </div>
+          )}
+
+          <a href="/api/auth/steam/login" className="mb-5 block">
+            <Button type="button" variant="outline" className="w-full sm:w-auto">
+              <LogIn className="h-4 w-4" /> Mit Steam anmelden
+            </Button>
+          </a>
+          <p className="mb-5 text-xs text-[var(--muted)]">
+            Trägt deine SteamID64 automatisch ein — den API Key brauchst du trotzdem noch einmal separat
+            (Steam vergibt den nicht über den Login).
+          </p>
+
           {!values ? (
             <p className="text-sm text-[var(--muted)]">Lädt…</p>
           ) : (
