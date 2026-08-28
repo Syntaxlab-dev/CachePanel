@@ -15,6 +15,13 @@ export interface ActivityBucket {
   requests: number;
 }
 
+export interface TimelinePoint {
+  bucket_start: string;
+  hit_bytes: number;
+  miss_bytes: number;
+  requests: number;
+}
+
 export interface DashboardStats {
   overall: {
     total_requests: number;
@@ -27,12 +34,14 @@ export interface DashboardStats {
   };
   services: ServiceStat[];
   recent_activity: ActivityBucket[];
+  timeline: TimelinePoint[];
 }
 
 export interface SteamGame {
   app_id: number;
   name: string;
   playtime_minutes: number;
+  last_played: number;
   icon_url: string | null;
   selected: boolean;
 }

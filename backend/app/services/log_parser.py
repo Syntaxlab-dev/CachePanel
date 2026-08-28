@@ -172,3 +172,29 @@ def recent_activity(entries: list[AccessEntry], bucket_minutes: int = 10, limit:
 
     rows = sorted(buckets.values(), key=lambda b: b["bucket_start"], reverse=True)
     return rows[:limit]
+
+
+def traffic_timeline(entries: list[AccessEntry], bucket_minutes: int = 15, limit: int = 48) -> list[dict]:
+    """Same idea as recent_activity, but merged across all services into a
+    single per-time-bucket series (for charting total traffic over time
+    rather than a per-service activity list). Returned oldest-first, since
+    that's the order a time-axis chart wants.
+    """
+    buckets: dict[str, dict] = {}
+    for entry in entries:
+        bucket_key_dt = entry.timestamp.replace(
+            minute=(entry.timestamp.minute // bucket_minutes) * bucket_minutes, second=0, microsecond=0
+        )
+        key = bucket_key_dt.isoformat()
+        bucket = buckets.setdefault(
+            key,
+            {"bucket_start": key, "hit_bytes": 0, "miss_bytes": 0, "requests": 0},
+        )
+        bucket["requests"] += 1
+        if entry.cache_status == "HIT":
+            bucket["hit_bytes"] += entry.bytes
+        else:
+            bucket["miss_bytes"] += entry.bytes
+
+    rows = sorted(buckets.values(), key=lambda b: b["bucket_start"], reverse=True)[:limit]
+    return list(reversed(rows))

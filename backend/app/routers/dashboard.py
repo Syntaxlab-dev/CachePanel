@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.services.log_parser import aggregate_service_stats, iter_access_entries, recent_activity
+from app.services.log_parser import aggregate_service_stats, iter_access_entries, recent_activity, traffic_timeline
 from app.settings import settings
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -47,4 +47,5 @@ def get_stats():
         },
         "services": services,
         "recent_activity": recent_activity(entries),
+        "timeline": traffic_timeline(entries),
     }

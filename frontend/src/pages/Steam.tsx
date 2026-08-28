@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api, type SteamGame } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 export function Steam() {
   const [games, setGames] = useState<SteamGame[] | null>(null);
@@ -19,6 +20,7 @@ export function Steam() {
   const [sizes, setSizes] = useState<Record<string, string> | null>(null);
   const [totalSize, setTotalSize] = useState<string | null>(null);
   const [loadingSizes, setLoadingSizes] = useState(false);
+  const [sortBy, setSortBy] = useState<"name" | "playtime" | "recent">("name");
 
   useEffect(() => {
     api
@@ -33,8 +35,17 @@ export function Steam() {
   const filtered = useMemo(() => {
     if (!games) return [];
     const q = search.trim().toLowerCase();
-    return q ? games.filter((g) => g.name.toLowerCase().includes(q)) : games;
-  }, [games, search]);
+    const matched = q ? games.filter((g) => g.name.toLowerCase().includes(q)) : games;
+    const sorted = [...matched];
+    if (sortBy === "name") {
+      sorted.sort((a, b) => a.name.localeCompare(b.name, "de"));
+    } else if (sortBy === "playtime") {
+      sorted.sort((a, b) => b.playtime_minutes - a.playtime_minutes);
+    } else {
+      sorted.sort((a, b) => b.last_played - a.last_played);
+    }
+    return sorted;
+  }, [games, search, sortBy]);
 
   function toggle(appId: number) {
     setSelected((prev) => {
@@ -140,7 +151,7 @@ export function Steam() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
           <Input
@@ -149,6 +160,29 @@ export function Steam() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+        <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-0.5">
+          {(
+            [
+              ["name", "A–Z"],
+              ["playtime", "Spielzeit"],
+              ["recent", "Zuletzt gespielt"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setSortBy(value)}
+              className={cn(
+                "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                sortBy === value
+                  ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                  : "text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <Button variant="outline" size="sm" onClick={selectAllFiltered}>
           <CheckSquare className="h-3.5 w-3.5" /> {search ? "Treffer auswählen" : "Alle auswählen"}

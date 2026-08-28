@@ -37,6 +37,7 @@ def get_owned_games(api_key: str, steam_id64: str) -> list[dict]:
             "app_id": g["appid"],
             "name": g.get("name", f"App {g['appid']}"),
             "playtime_minutes": g.get("playtime_forever", 0),
+            "last_played": g.get("rtime_last_played", 0),
             "icon_url": (
                 f"https://media.steampowered.com/steamcommunity/public/images/apps/"
                 f"{g['appid']}/{g['img_icon_url']}.jpg"

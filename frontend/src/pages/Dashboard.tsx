@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, ArrowDownCircle, CheckCircle2, Gauge, Server, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TrafficChart } from "@/components/TrafficChart";
 import { api, type DashboardStats, type HealthStatus } from "@/lib/api";
 import { formatBytes, formatPercent, formatUptime } from "@/lib/utils";
 
@@ -30,7 +31,7 @@ export function Dashboard() {
     return <div className="text-sm text-[var(--muted)]">Lade Statistiken…</div>;
   }
 
-  const { overall, services, recent_activity } = stats;
+  const { overall, services, recent_activity, timeline } = stats;
 
   return (
     <div className="flex flex-col gap-6">
@@ -92,6 +93,15 @@ export function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Traffic-Verlauf</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TrafficChart data={timeline} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
