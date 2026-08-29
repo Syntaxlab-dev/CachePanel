@@ -5,7 +5,7 @@ from app.services.health import get_core_health
 router = APIRouter(prefix="/api/health", tags=["health"])
 
 
-@router.get("")
+@router.get("", summary="Core container health", description="Status + uptime of the core lancache/lancache-dns containers.")
 def health():
     results = get_core_health()
     return {

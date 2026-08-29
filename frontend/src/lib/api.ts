@@ -22,6 +22,15 @@ export interface TimelinePoint {
   requests: number;
 }
 
+export interface ClientStat {
+  client_ip: string;
+  hit_bytes: number;
+  miss_bytes: number;
+  total_bytes: number;
+  requests: number;
+  last_seen: string | null;
+}
+
 export interface DashboardStats {
   overall: {
     total_requests: number;
@@ -35,6 +44,7 @@ export interface DashboardStats {
   services: ServiceStat[];
   recent_activity: ActivityBucket[];
   timeline: TimelinePoint[];
+  top_clients: ClientStat[];
 }
 
 export interface SteamGame {

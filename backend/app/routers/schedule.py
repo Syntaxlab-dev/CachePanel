@@ -18,12 +18,12 @@ class ScheduleUpdate(BaseModel):
     epic: ServiceScheduleUpdate | None = None
 
 
-@router.get("")
+@router.get("", summary="Current per-service prefill schedule")
 def get_schedule():
     return schedule_store.get_schedule()
 
 
-@router.post("")
+@router.post("", summary="Update per-service prefill schedule", description="Partial update -- only services present in the body are changed. Triggers an immediate scheduler reload.")
 def update_schedule(body: ScheduleUpdate):
     partial = {}
     for service, entry in (("steam", body.steam), ("battlenet", body.battlenet), ("epic", body.epic)):

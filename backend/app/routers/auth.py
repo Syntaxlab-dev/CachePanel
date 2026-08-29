@@ -12,7 +12,7 @@ class Credentials(BaseModel):
     password: str
 
 
-@router.get("/status")
+@router.get("/status", summary="Panel auth status", description="Whether first-run setup is still required, and whether the current session is authenticated. Reachable without a session, unlike everything else under /api/.")
 def auth_status(request: Request):
     """Unauthenticated-reachable status check the frontend polls on load to
     decide whether to show the setup screen, the login screen, or the app."""
@@ -21,7 +21,7 @@ def auth_status(request: Request):
     return {"setup_required": False, "authenticated": bool(request.session.get("authenticated"))}
 
 
-@router.post("/setup")
+@router.post("/setup", summary="First-run credential setup")
 def auth_setup(body: Credentials, request: Request):
     """First-run only: sets the initial panel credentials. Refuses if
     credentials already exist -- changing an existing login isn't this
@@ -41,7 +41,7 @@ def auth_setup(body: Credentials, request: Request):
     return {"ok": True}
 
 
-@router.post("/login")
+@router.post("/login", summary="Panel login")
 def auth_login(body: Credentials, request: Request):
     if not auth_credentials_store.verify_credentials(body.username.strip(), body.password):
         raise HTTPException(status_code=401, detail="Benutzername oder Passwort falsch.")
@@ -50,13 +50,13 @@ def auth_login(body: Credentials, request: Request):
     return {"ok": True}
 
 
-@router.post("/logout")
+@router.post("/logout", summary="Panel logout")
 def auth_logout(request: Request):
     request.session.clear()
     return {"ok": True}
 
 
-@router.get("/steam/login")
+@router.get("/steam/login", summary="Start Steam OpenID login", description="Redirects to Steam's own login page to auto-fill the SteamID64 in Settings -- unrelated to the panel's own login, and always exempt from AuthGuardMiddleware since it IS a login flow.")
 def steam_login(request: Request):
     base = str(request.base_url)  # e.g. http://10.0.0.160:8090/
     return_to = f"{base}api/auth/steam/callback"
@@ -64,7 +64,7 @@ def steam_login(request: Request):
     return RedirectResponse(login_url)
 
 
-@router.get("/steam/callback")
+@router.get("/steam/callback", summary="Steam OpenID callback")
 def steam_callback(request: Request):
     try:
         steam_id64 = steam_openid.verify_and_extract_steam_id(dict(request.query_params))

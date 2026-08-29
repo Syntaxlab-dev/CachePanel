@@ -21,7 +21,7 @@ def _credentials() -> tuple[str, str]:
     return api_key, steam_id64
 
 
-@router.get("/library")
+@router.get("/library", summary="Owned Steam library", description="Fetches the real owned-games library via the Steam Web API, flagged with current prefill selection. Requires a Steam API key + SteamID64 in Settings.")
 def get_library():
     api_key, steam_id64 = _credentials()
     if not api_key or not steam_id64:
@@ -41,12 +41,12 @@ def get_library():
     return {"games": sorted(games, key=lambda g: g["name"].lower())}
 
 
-@router.get("/selection")
+@router.get("/selection", summary="Current Steam prefill selection")
 def get_selection():
     return {"app_ids": prefill_selection.read_selection(settings.steam_prefill_config_dir)}
 
 
-@router.post("/selection")
+@router.post("/selection", summary="Update Steam prefill selection")
 def update_selection(body: SelectionUpdate):
     prefill_selection.write_selection(settings.steam_prefill_config_dir, body.app_ids)
     return {"app_ids": body.app_ids}

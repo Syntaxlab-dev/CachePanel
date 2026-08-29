@@ -7,7 +7,7 @@ from app.services.prefill_runner import PrefillRunnerError, resolve_stream_targe
 router = APIRouter(prefix="/api/prefill", tags=["prefill"])
 
 
-@router.post("/{service}/run")
+@router.post("/{service}/run", summary="Run a prefill now", description="Triggers `steam|battlenet|epic-prefill` immediately (docker exec) instead of waiting for its schedule. Blocks until the run finishes.")
 def run_prefill(service: str):
     try:
         result = trigger_prefill(service)
@@ -21,7 +21,11 @@ def run_prefill(service: str):
     }
 
 
-@router.get("/{service}/stream")
+@router.get(
+    "/{service}/stream",
+    summary="Live prefill output (SSE)",
+    description="Server-Sent Events stream of a prefill run's live output, for the frontend's live-log view.",
+)
 def stream_prefill_run(service: str):
     """Server-Sent Events endpoint: streams prefill output live as it
     happens. GET (not POST) so the browser's native EventSource can consume
@@ -41,6 +45,6 @@ def stream_prefill_run(service: str):
     )
 
 
-@router.get("/history")
+@router.get("/history", summary="Recent prefill run history")
 def get_history():
     return {"runs": run_history_store.get_history()}

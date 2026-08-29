@@ -12,7 +12,7 @@ class SelectionUpdate(BaseModel):
     codes: list[str]
 
 
-@router.get("/catalog")
+@router.get("/catalog", summary="Battle.net product catalog", description="Static list of all known Battle.net/Activision/Microsoft products, flagged with current prefill selection.")
 def get_catalog():
     selected = set(prefill_selection.read_selection(settings.battlenet_prefill_config_dir))
     return {
@@ -28,12 +28,12 @@ def get_catalog():
     }
 
 
-@router.get("/selection")
+@router.get("/selection", summary="Current Battle.net prefill selection")
 def get_selection():
     return {"codes": prefill_selection.read_selection(settings.battlenet_prefill_config_dir)}
 
 
-@router.post("/selection")
+@router.post("/selection", summary="Update Battle.net prefill selection")
 def update_selection(body: SelectionUpdate):
     prefill_selection.write_selection(settings.battlenet_prefill_config_dir, body.codes)
     return {"codes": body.codes}

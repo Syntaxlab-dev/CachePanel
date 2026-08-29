@@ -17,12 +17,12 @@ class SelectionUpdate(BaseModel):
     app_ids: list[str]
 
 
-@router.get("/selection")
+@router.get("/selection", summary="Current Epic prefill selection", description="Epic has no public ownership API, so this list is manually maintained by the user.")
 def get_selection():
     return {"app_ids": prefill_selection.read_selection(settings.epic_prefill_config_dir)}
 
 
-@router.post("/selection")
+@router.post("/selection", summary="Update Epic prefill selection")
 def update_selection(body: SelectionUpdate):
     prefill_selection.write_selection(settings.epic_prefill_config_dir, body.app_ids)
     return {"app_ids": body.app_ids}

@@ -174,6 +174,33 @@ def recent_activity(entries: list[AccessEntry], bucket_minutes: int = 10, limit:
     return rows[:limit]
 
 
+def client_stats(entries: list[AccessEntry], limit: int = 20) -> list[dict]:
+    """Aggregates per-client-IP traffic across all services, for a "top
+    clients" view. Same full-scan approach as aggregate_service_stats --
+    entries are already capped by max_lines in iter_access_entries, so this
+    stays cheap.
+    """
+    stats: dict[str, dict] = {}
+    for entry in entries:
+        s = stats.setdefault(
+            entry.client_ip,
+            {"client_ip": entry.client_ip, "hit_bytes": 0, "miss_bytes": 0, "requests": 0, "last_seen": None},
+        )
+        s["requests"] += 1
+        if entry.cache_status == "HIT":
+            s["hit_bytes"] += entry.bytes
+        else:
+            s["miss_bytes"] += entry.bytes
+        if s["last_seen"] is None or entry.timestamp > s["last_seen"]:
+            s["last_seen"] = entry.timestamp
+
+    rows = sorted(stats.values(), key=lambda s: s["hit_bytes"] + s["miss_bytes"], reverse=True)[:limit]
+    for r in rows:
+        r["total_bytes"] = r["hit_bytes"] + r["miss_bytes"]
+        r["last_seen"] = r["last_seen"].isoformat() if r["last_seen"] else None
+    return rows
+
+
 def traffic_timeline(entries: list[AccessEntry], bucket_minutes: int = 15, limit: int = 48) -> list[dict]:
     """Same idea as recent_activity, but merged across all services into a
     single per-time-bucket series (for charting total traffic over time

@@ -54,6 +54,33 @@ CachePanel needs read/write access to each prefill tool's config directory
 (to manage the `selectedAppsToPrefill.json` selection file) and to the Docker
 socket (to trigger an on-demand `prefill` run inside those containers).
 
+## Monitoring: Prometheus & Grafana
+
+CachePanel exposes a Prometheus-compatible `/metrics` endpoint — deliberately
+unauthenticated (it sits outside `/api/`, see `backend/app/routers/metrics.py`
+for why) so an external scraper can reach it without a session cookie. It
+covers cache hit/miss bytes and requests per service, hit ratio, core-container
+health, and the most recent prefill run per service.
+
+Example Prometheus scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: cachepanel
+    static_configs:
+      - targets: ["<host>:8090"]
+```
+
+A ready-made dashboard ships at
+[`grafana/cachepanel-dashboard.json`](grafana/cachepanel-dashboard.json) —
+add a Prometheus datasource in Grafana pointed at your scraper, then
+**Dashboards → New → Import** and pick that file.
+
+## API docs
+
+The backend's interactive API docs are available at `/docs` (Swagger UI) and
+`/openapi.json` (machine-readable schema) on any running instance.
+
 ## Known limitations
 
 - **Epic Games** has no public API for a personal library, so v1 only

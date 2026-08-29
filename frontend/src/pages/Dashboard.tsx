@@ -7,6 +7,7 @@ import {
   History,
   Server,
   Trash2,
+  Users,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,7 +27,8 @@ const SERVICE_LABEL: Record<string, string> = {
 };
 
 export function Dashboard() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const locale = lang === "de" ? "de-DE" : "en-US";
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -74,7 +76,7 @@ export function Dashboard() {
     return <div className="text-sm text-[var(--muted)]">{t("dashboard.loading")}</div>;
   }
 
-  const { overall, services, recent_activity, timeline } = stats;
+  const { overall, services, recent_activity, timeline, top_clients } = stats;
 
   return (
     <div className="flex flex-col gap-6">
@@ -205,6 +207,37 @@ export function Dashboard() {
               </div>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-4 w-4" /> {t("dashboard.topClients")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {top_clients.length === 0 ? (
+            <p className="text-sm text-[var(--muted)]">{t("dashboard.noClients")}</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-[var(--border)]">
+              {top_clients.map((c) => (
+                <div key={c.client_ip} className="flex items-center justify-between py-2.5 text-sm">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="neutral">{c.client_ip}</Badge>
+                    <span className="text-[var(--muted)]">
+                      {c.requests.toLocaleString(locale)} {t("dashboard.clientRequests")}
+                    </span>
+                  </div>
+                  <span className="text-[var(--muted)]">
+                    {formatBytes(c.total_bytes)}
+                    {c.last_seen &&
+                      ` · ${t("dashboard.clientLastSeen")} ${new Date(c.last_seen).toLocaleString(locale)}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

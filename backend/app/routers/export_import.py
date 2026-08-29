@@ -21,7 +21,7 @@ class ImportBundle(BaseModel):
     epic_app_ids: list[str]
 
 
-@router.get("/export")
+@router.get("/export", summary="Export full prefill selection", description="Bundles the Steam/Battle.net/Epic selections into one JSON document for backup or transfer to another CachePanel instance.")
 def export_selection():
     return {
         "schema_version": SCHEMA_VERSION,
@@ -31,7 +31,7 @@ def export_selection():
     }
 
 
-@router.post("/import")
+@router.post("/import", summary="Import full prefill selection", description="Replaces the Steam/Battle.net/Epic selections from a previously exported bundle. All-or-nothing: rejected entirely if the schema version doesn't match.")
 def import_selection(bundle: ImportBundle):
     if bundle.schema_version != SCHEMA_VERSION:
         raise HTTPException(

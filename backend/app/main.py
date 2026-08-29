@@ -15,6 +15,7 @@ from app.routers import (
     epic,
     export_import,
     health,
+    metrics,
     prefill,
     schedule,
     settings,
@@ -31,7 +32,13 @@ async def lifespan(_app: FastAPI):
     scheduler_service.shutdown()
 
 
-app = FastAPI(title="CachePanel API", lifespan=lifespan)
+app = FastAPI(
+    title="CachePanel API",
+    description="Self-hosted web UI for a LanCache setup: cache/traffic dashboard, Steam/Battle.net/Epic "
+    "prefill selection and scheduling, and a Prometheus /metrics endpoint for external monitoring. "
+    "Interactive docs at /docs, machine-readable schema at /openapi.json.",
+    lifespan=lifespan,
+)
 
 # Middleware order matters here: Starlette wraps the LAST-added middleware
 # as the OUTERMOST layer (it runs first on the way in). SessionMiddleware
@@ -59,6 +66,7 @@ app.include_router(health.router)
 app.include_router(cache.router)
 app.include_router(export_import.router)
 app.include_router(schedule.router)
+app.include_router(metrics.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 

@@ -1,12 +1,23 @@
 from fastapi import APIRouter
 
-from app.services.log_parser import aggregate_service_stats, iter_access_entries, recent_activity, traffic_timeline
+from app.services.log_parser import (
+    aggregate_service_stats,
+    client_stats,
+    iter_access_entries,
+    recent_activity,
+    traffic_timeline,
+)
 from app.settings import settings
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
-@router.get("/stats")
+@router.get(
+    "/stats",
+    summary="Overall cache/traffic statistics",
+    description="Aggregates the tail of the LanCache access log into overall + per-service hit/miss stats, "
+    "a recent-activity feed, a traffic timeline, and a per-client-IP top list.",
+)
 def get_stats():
     access_path = settings.lancache_log_dir / "access.log"
     entries = iter_access_entries(access_path, max_lines=100_000)
@@ -48,4 +59,5 @@ def get_stats():
         "services": services,
         "recent_activity": recent_activity(entries),
         "timeline": traffic_timeline(entries),
+        "top_clients": client_stats(entries),
     }
