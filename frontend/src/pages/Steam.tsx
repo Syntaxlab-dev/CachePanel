@@ -31,7 +31,7 @@ export function Steam() {
         setGames(data.games);
         setSelected(new Set(data.games.filter((g) => g.selected).map((g) => g.app_id)));
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Unbekannter Fehler"));
+      .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
   }, []);
 
   const filtered = useMemo(() => {
@@ -77,9 +77,9 @@ export function Steam() {
     setSaving(true);
     try {
       await api.saveSteamSelection(Array.from(selected));
-      toast.success(`${selected.size} Spiele gespeichert.`);
+      toast.success(`${selected.size} ${t("steam.gamesSavedSuffix")}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : t("common.savingFailed"));
     } finally {
       setSaving(false);
     }
@@ -93,9 +93,9 @@ export function Steam() {
       result.apps.forEach((a) => (map[a.name] = a.size));
       setSizes(map);
       setTotalSize(result.total_size);
-      toast.success("Downloadgrößen geladen.");
+      toast.success(t("steam.sizesLoaded"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Größen konnten nicht geladen werden");
+      toast.error(err instanceof Error ? err.message : t("steam.sizesLoadFailed"));
     } finally {
       setLoadingSizes(false);
     }
@@ -105,10 +105,10 @@ export function Steam() {
     return (
       <div className="flex flex-col gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
         <div className="flex items-center gap-2">
-          <AlertCircle className="h-4 w-4" /> Steam-Bibliothek konnte nicht geladen werden: {error}
+          <AlertCircle className="h-4 w-4" /> {t("steam.loadError")} {error}
         </div>
         <Link to="/settings" className="w-fit underline underline-offset-2">
-          Zu den Einstellungen →
+          {t("steam.goToSettings")}
         </Link>
       </div>
     );
@@ -120,8 +120,14 @@ export function Steam() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("steam.title")}</h1>
           <p className="text-sm text-[var(--muted)]">
-            {games ? `${games.length} Spiele in deiner Bibliothek · ${selected.size} ausgewählt` : "Lade Bibliothek…"}
-            {totalSize && <span className="ml-2 text-[var(--ink)]">· {totalSize} gesamt</span>}
+            {games
+              ? `${games.length} ${t("steam.gamesInLibrary")} · ${selected.size} ${t("common.selected")}`
+              : t("steam.loadingLibrary")}
+            {totalSize && (
+              <span className="ml-2 text-[var(--ink)]">
+                · {totalSize} {t("common.total")}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -186,15 +192,21 @@ export function Steam() {
                 className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm hover:bg-[var(--surface-2)]"
               >
                 <Checkbox checked={selected.has(game.app_id)} onCheckedChange={() => toggle(game.app_id)} />
-                {game.icon_url ? (
-                  <img src={game.icon_url} alt="" className="h-8 w-8 rounded" />
+                {game.cover_url || game.icon_url ? (
+                  <img
+                    src={game.cover_url ?? game.icon_url ?? undefined}
+                    alt=""
+                    className="h-8 w-8 rounded object-cover"
+                  />
                 ) : (
                   <div className="h-8 w-8 rounded bg-[var(--surface-2)]" />
                 )}
                 <span className="flex-1">{game.name}</span>
                 {sizes?.[game.name] && <Badge variant="neutral">{sizes[game.name]}</Badge>}
                 {game.playtime_minutes > 0 && (
-                  <Badge variant="neutral">{Math.round(game.playtime_minutes / 60)} Std. gespielt</Badge>
+                  <Badge variant="neutral">
+                    {Math.round(game.playtime_minutes / 60)} {t("common.hoursPlayed")}
+                  </Badge>
                 )}
               </label>
             ))}

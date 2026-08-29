@@ -22,6 +22,14 @@
   --danger: #c53030;
   --danger-soft: #fbe8e8;
   --shadow: 0 1px 2px rgba(15, 20, 30, 0.05), 0 8px 24px -12px rgba(15, 20, 30, 0.15);
+
+  /* Fixed reference colors for the accent-picker swatches -- these don't
+     change with light/dark, only the --accent/-ink/-soft triad below does. */
+  --accent-swatch-blue: #4f6df5;
+  --accent-swatch-purple: #8b5cf6;
+  --accent-swatch-green: #16a34a;
+  --accent-swatch-orange: #ea580c;
+  --accent-swatch-pink: #db2777;
 }
 
 .dark {
@@ -41,6 +49,54 @@
   --danger: #ea6a6a;
   --danger-soft: #3a1616;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* Accent color presets (Settings -> Appearance). "blue" is the default and
+   needs no override -- it's already the values above. Each preset redefines
+   the same --accent/--accent-ink/--accent-soft triad the rest of the app
+   already reads, so no component needs to know presets exist. */
+:root[data-accent="purple"] {
+  --accent: #8b5cf6;
+  --accent-ink: #ffffff;
+  --accent-soft: #ede9fe;
+}
+.dark[data-accent="purple"] {
+  --accent: #a78bfa;
+  --accent-ink: #171123;
+  --accent-soft: #2c2140;
+}
+
+:root[data-accent="green"] {
+  --accent: #16a34a;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcfce7;
+}
+.dark[data-accent="green"] {
+  --accent: #4ade80;
+  --accent-ink: #0c1f13;
+  --accent-soft: #123420;
+}
+
+:root[data-accent="orange"] {
+  --accent: #ea580c;
+  --accent-ink: #ffffff;
+  --accent-soft: #ffedd5;
+}
+.dark[data-accent="orange"] {
+  --accent: #fb923c;
+  --accent-ink: #241207;
+  --accent-soft: #3a2110;
+}
+
+:root[data-accent="pink"] {
+  --accent: #db2777;
+  --accent-ink: #ffffff;
+  --accent-soft: #fce7f3;
+}
+.dark[data-accent="pink"] {
+  --accent: #f472b6;
+  --accent-ink: #240f1b;
+  --accent-soft: #3a1a2c;
 }
 
 * {

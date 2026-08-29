@@ -30,7 +30,7 @@ export function PrefillRunPanel({ service }: { service: "steam" | "battlenet" | 
     eventSourceRef.current = es;
 
     es.addEventListener("started", () => {
-      setLines((prev) => [...prev, `-- ${SERVICE_LABEL[service]}-Download gestartet --`]);
+      setLines((prev) => [...prev, `-- ${SERVICE_LABEL[service]} ${t("prefill.started")} --`]);
     });
 
     es.onmessage = (event) => {
@@ -40,11 +40,11 @@ export function PrefillRunPanel({ service }: { service: "steam" | "battlenet" | 
 
     es.addEventListener("done", (event) => {
       const exitCode = Number((event as MessageEvent).data);
-      setLines((prev) => [...prev, `-- Beendet mit Exit-Code ${exitCode} --`]);
+      setLines((prev) => [...prev, `-- ${t("prefill.finishedWithExitPrefix")} ${exitCode} --`]);
       if (exitCode === 0) {
-        toast.success(`${SERVICE_LABEL[service]}: Download abgeschlossen.`);
+        toast.success(`${SERVICE_LABEL[service]}: ${t("prefill.completed")}`);
       } else {
-        toast.error(`${SERVICE_LABEL[service]}: Lief mit Exit-Code ${exitCode}.`);
+        toast.error(`${SERVICE_LABEL[service]}: ${t("prefill.exitedWithCodePrefix")} ${exitCode}.`);
       }
       es.close();
       setRunning(false);
@@ -72,7 +72,7 @@ export function PrefillRunPanel({ service }: { service: "steam" | "battlenet" | 
           <div className="flex items-center gap-2 text-xs font-medium text-[var(--muted)]">
             <Terminal className="h-3.5 w-3.5" />
             {t("prefill.liveLog")}
-            {running && <Badge variant="accent">läuft</Badge>}
+            {running && <Badge variant="accent">{t("dashboard.containerRunning")}</Badge>}
           </div>
           <div className="max-h-56 overflow-y-auto rounded-md bg-[var(--bg)] p-2 font-mono text-xs text-[var(--ink)]">
             {lines.map((line, i) => (

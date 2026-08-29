@@ -18,7 +18,7 @@ export function Epic() {
     api
       .epicSelection()
       .then((data) => setAppIds(data.app_ids))
-      .catch((err) => setError(err instanceof Error ? err.message : "Unbekannter Fehler"));
+      .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
   }, []);
 
   async function persist(next: string[]) {
@@ -26,7 +26,7 @@ export function Epic() {
     try {
       await api.saveEpicSelection(next);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : t("common.savingFailed"));
     }
   }
 
@@ -35,11 +35,11 @@ export function Epic() {
     const value = newId.trim();
     if (!value) return;
     if (appIds?.includes(value)) {
-      toast.error("Ist schon in der Auswahl.");
+      toast.error(t("epic.alreadySelected"));
       return;
     }
     persist([...(appIds ?? []), value]);
-    toast.success(`"${value}" hinzugefügt.`);
+    toast.success(`"${value}" ${t("epic.addedSuffix")}`);
     setNewId("");
   }
 
@@ -50,7 +50,7 @@ export function Epic() {
   if (error) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
-        <AlertCircle className="h-4 w-4" /> Epic-Auswahl konnte nicht geladen werden: {error}
+        <AlertCircle className="h-4 w-4" /> {t("epic.loadError")} {error}
       </div>
     );
   }

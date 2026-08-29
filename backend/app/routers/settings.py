@@ -9,6 +9,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 class SettingsUpdate(BaseModel):
     steam_api_key: str | None = None
     steam_id64: str | None = None
+    steamgriddb_api_key: str | None = None
 
 
 @router.get("", summary="Current app settings", description="Steam API key + SteamID64, as stored (encrypted at rest) on this instance. Never shared with anyone else.")

@@ -9,13 +9,18 @@ import { Settings } from "@/pages/Settings";
 import { Setup } from "@/pages/Setup";
 import { Login } from "@/pages/Login";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import { I18nProvider } from "@/lib/i18n";
+import { I18nProvider, useI18n } from "@/lib/i18n";
 
 function Gate() {
   const { loading, setupRequired, authenticated } = useAuth();
+  const { t } = useI18n();
 
   if (loading) {
-    return <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] text-[var(--muted)]">Lädt…</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] text-[var(--muted)]">
+        {t("common.loading")}
+      </div>
+    );
   }
   if (setupRequired) return <Setup />;
   if (!authenticated) return <Login />;

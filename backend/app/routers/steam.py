@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.services import app_settings_store, prefill_selection, steam_api
+from app.services import app_settings_store, cover_art, prefill_selection, steam_api
 from app.settings import settings
 
 router = APIRouter(prefix="/api/steam", tags=["steam"])
@@ -37,6 +37,9 @@ def get_library():
     selected = set(prefill_selection.read_selection(settings.steam_prefill_config_dir))
     for game in games:
         game["selected"] = game["app_id"] in selected
+
+    griddb_key = app_settings_store.get_settings().get("steamgriddb_api_key") or ""
+    cover_art.enrich_steam_games(games, griddb_key)
 
     return {"games": sorted(games, key=lambda g: g["name"].lower())}
 

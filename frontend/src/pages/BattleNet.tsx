@@ -22,7 +22,7 @@ export function BattleNet() {
         setProducts(data.products);
         setSelected(new Set(data.products.filter((p) => p.selected).map((p) => p.code)));
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Unbekannter Fehler"));
+      .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
   }, []);
 
   const grouped = useMemo(() => {
@@ -54,9 +54,9 @@ export function BattleNet() {
     setSaving(true);
     try {
       await api.saveBattlenetSelection(Array.from(selected));
-      toast.success(`${selected.size} Produkte gespeichert.`);
+      toast.success(`${selected.size} ${t("battlenet.productsSavedSuffix")}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : t("common.savingFailed"));
     } finally {
       setSaving(false);
     }
@@ -65,7 +65,7 @@ export function BattleNet() {
   if (error) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
-        <AlertCircle className="h-4 w-4" /> Battle.net-Katalog konnte nicht geladen werden: {error}
+        <AlertCircle className="h-4 w-4" /> {t("battlenet.loadError")} {error}
       </div>
     );
   }
@@ -77,8 +77,8 @@ export function BattleNet() {
           <h1 className="text-2xl font-semibold tracking-tight">{t("battlenet.title")}</h1>
           <p className="text-sm text-[var(--muted)]">
             {products
-              ? `${products.length} Produkte verfügbar · ${selected.size} ausgewählt`
-              : "Lade Katalog…"}
+              ? `${products.length} ${t("battlenet.productsAvailable")} · ${selected.size} ${t("common.selected")}`
+              : t("battlenet.loadingCatalog")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -113,6 +113,11 @@ export function BattleNet() {
                 className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-[var(--surface-2)]"
               >
                 <Checkbox checked={selected.has(p.code)} onCheckedChange={() => toggle(p.code)} />
+                {p.cover_url ? (
+                  <img src={p.cover_url} alt="" className="h-8 w-8 rounded object-cover" />
+                ) : (
+                  <div className="h-8 w-8 rounded bg-[var(--surface-2)]" />
+                )}
                 <span>{p.name}</span>
               </label>
             ))}

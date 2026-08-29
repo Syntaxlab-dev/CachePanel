@@ -1,16 +1,17 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { TimelinePoint } from "@/lib/api";
 import { formatBytes } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+function formatTime(iso: string, locale: string): string {
+  return new Date(iso).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label, locale }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs shadow-[var(--shadow)]">
-      <p className="mb-1 font-medium text-[var(--ink)]">{formatTime(label)}</p>
+      <p className="mb-1 font-medium text-[var(--ink)]">{formatTime(label, locale)}</p>
       {payload.map((entry: any) => (
         <p key={entry.dataKey} style={{ color: entry.color }}>
           {entry.name}: {formatBytes(entry.value)}
@@ -21,10 +22,13 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 export function TrafficChart({ data }: { data: TimelinePoint[] }) {
+  const { t, lang } = useI18n();
+  const locale = lang === "de" ? "de-DE" : "en-US";
+
   if (data.length === 0) {
     return (
       <div className="flex h-56 items-center justify-center text-sm text-[var(--muted)]">
-        Noch keine Aktivität für einen Verlauf aufgezeichnet.
+        {t("trafficChart.empty")}
       </div>
     );
   }
@@ -45,7 +49,7 @@ export function TrafficChart({ data }: { data: TimelinePoint[] }) {
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
         <XAxis
           dataKey="bucket_start"
-          tickFormatter={formatTime}
+          tickFormatter={(v) => formatTime(v, locale)}
           stroke="var(--muted)"
           fontSize={12}
           tickLine={false}
@@ -60,11 +64,11 @@ export function TrafficChart({ data }: { data: TimelinePoint[] }) {
           axisLine={false}
           width={70}
         />
-        <Tooltip content={<CustomTooltip />} />
+        <Tooltip content={<CustomTooltip locale={locale} />} />
         <Area
           type="monotone"
           dataKey="hit_bytes"
-          name="Aus Cache (Hit)"
+          name={t("trafficChart.hitSeries")}
           stroke="var(--accent)"
           fill="url(#hitGradient)"
           strokeWidth={2}
@@ -73,7 +77,7 @@ export function TrafficChart({ data }: { data: TimelinePoint[] }) {
         <Area
           type="monotone"
           dataKey="miss_bytes"
-          name="Neu geladen (Miss)"
+          name={t("trafficChart.missSeries")}
           stroke="var(--warn)"
           fill="url(#missGradient)"
           strokeWidth={2}

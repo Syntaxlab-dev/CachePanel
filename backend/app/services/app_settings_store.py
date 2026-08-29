@@ -22,6 +22,7 @@ _lock = Lock()
 _DEFAULTS = {
     "steam_api_key": "",
     "steam_id64": "",
+    "steamgriddb_api_key": "",
 }
 
 

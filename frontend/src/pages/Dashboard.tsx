@@ -53,7 +53,7 @@ export function Dashboard() {
     api
       .dashboardStats()
       .then(setStats)
-      .catch((err) => setError(err instanceof Error ? err.message : "Unbekannter Fehler"));
+      .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
     api.health().then(setHealth).catch(() => setHealth(null));
     api
       .runHistory()
@@ -70,7 +70,7 @@ export function Dashboard() {
     try {
       setScan(await api.scanCache());
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Scan fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : t("dashboard.scanFailed"));
     } finally {
       setScanning(false);
     }
@@ -84,16 +84,14 @@ export function Dashboard() {
       toast.success(result.message);
       setScan(await api.scanCache());
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Bereinigung fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : t("dashboard.cleanFailed"));
     } finally {
       setCleaning(false);
     }
   }
 
   async function handleClearCache() {
-    const confirmed = window.confirm(
-      "Wirklich den GESAMTEN Cache leeren? Das betrifft alle Dienste (Steam, Battle.net, Epic, ...), nicht nur einen einzelnen -- eine gezielte Teil-Leerung ist technisch nicht sicher möglich. Bereits gecachte Downloads müssten danach erneut aus dem Internet geladen werden.",
-    );
+    const confirmed = window.confirm(t("dashboard.clearCacheConfirm"));
     if (!confirmed) return;
 
     setClearing(true);
@@ -101,7 +99,7 @@ export function Dashboard() {
       const result = await api.clearCache();
       toast.success(result.message);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Cache leeren fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : t("dashboard.clearCacheFailed"));
     } finally {
       setClearing(false);
     }
@@ -110,7 +108,7 @@ export function Dashboard() {
   if (error) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
-        <AlertCircle className="h-4 w-4" /> Statistiken konnten nicht geladen werden: {error}
+        <AlertCircle className="h-4 w-4" /> {t("dashboard.statsError")} {error}
       </div>
     );
   }
@@ -149,7 +147,7 @@ export function Dashboard() {
         <StatCard
           icon={<Gauge className="h-4 w-4" />}
           label={t("dashboard.stat.totalRequests")}
-          value={overall.total_requests.toLocaleString("de-DE")}
+          value={overall.total_requests.toLocaleString(locale)}
         />
       </div>
 
@@ -177,7 +175,11 @@ export function Dashboard() {
                     <span className="font-medium">{c.name}</span>
                   </div>
                   <span className="text-[var(--muted)]">
-                    {running ? "läuft" : c.status === "not_found" ? "nicht gefunden" : c.status}
+                    {running
+                      ? t("dashboard.containerRunning")
+                      : c.status === "not_found"
+                        ? t("dashboard.containerNotFound")
+                        : c.status}
                     {running && c.uptime_seconds != null && ` · seit ${formatUptime(c.uptime_seconds)}`}
                   </span>
                 </div>
@@ -265,11 +267,11 @@ export function Dashboard() {
                       {SERVICE_LABEL[run.service] ?? run.service}
                     </Badge>
                     <span className="text-[var(--muted)]">
-                      {new Date(run.started_at).toLocaleString("de-DE")}
+                      {new Date(run.started_at).toLocaleString(locale)}
                     </span>
                   </div>
                   <span className="text-[var(--muted)]">
-                    {run.exit_code === 0 ? "erfolgreich" : `Exit-Code ${run.exit_code}`} ·{" "}
+                    {run.exit_code === 0 ? t("dashboard.runSuccessful") : `Exit-Code ${run.exit_code}`} ·{" "}
                     {run.duration_seconds.toFixed(1)}s
                   </span>
                 </div>
@@ -301,7 +303,7 @@ export function Dashboard() {
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium capitalize">{s.service}</span>
                 <span className="text-[var(--muted)]">
-                  {formatBytes(s.total_bytes)} · {formatPercent(s.hit_ratio)} Trefferquote
+                  {formatBytes(s.total_bytes)} · {formatPercent(s.hit_ratio)} {t("dashboard.stat.hitRatio")}
                 </span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-2)]">
@@ -360,11 +362,12 @@ export function Dashboard() {
                   <div className="flex items-center gap-3">
                     <Badge variant="accent">{a.service}</Badge>
                     <span className="text-[var(--muted)]">
-                      {new Date(a.bucket_start).toLocaleString("de-DE")}
+                      {new Date(a.bucket_start).toLocaleString(locale)}
                     </span>
                   </div>
                   <span className="text-[var(--muted)]">
-                    {a.requests.toLocaleString("de-DE")} Anfragen · {formatBytes(a.hit_bytes + a.miss_bytes)}
+                    {a.requests.toLocaleString(locale)} {t("dashboard.clientRequests")} ·{" "}
+                    {formatBytes(a.hit_bytes + a.miss_bytes)}
                   </span>
                 </div>
               ))}

@@ -40,9 +40,9 @@ export function ScheduleCard() {
     try {
       const updated = await api.saveSchedule(config);
       setConfig(updated);
-      toast.success("Zeitplan gespeichert.");
+      toast.success(t("schedule.saved"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : t("common.savingFailed"));
     } finally {
       setSaving(false);
     }
@@ -58,14 +58,11 @@ export function ScheduleCard() {
       <CardContent className="flex flex-col gap-4">
         <div className="flex items-start gap-2 rounded-lg border border-[var(--warn)]/40 bg-[var(--warn-soft)] p-3 text-xs text-[var(--warn)]">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>
-            Der alte feste Zeitplan (02:00/23:00 Uhr) in den einzelnen Prefill-Containern läuft aktuell parallel
-            weiter, bis er manuell deaktiviert wird.
-          </span>
+          <span>{t("schedule.legacyWarning")}</span>
         </div>
 
         {!config ? (
-          <p className="text-sm text-[var(--muted)]">Lädt…</p>
+          <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
         ) : (
           <>
             <div className="flex flex-col divide-y divide-[var(--border)]">

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.services import prefill_selection
+from app.services import app_settings_store, cover_art, prefill_selection
 from app.services.battlenet_catalog import BATTLENET_CATALOG
 from app.settings import settings
 
@@ -15,17 +15,20 @@ class SelectionUpdate(BaseModel):
 @router.get("/catalog", summary="Battle.net product catalog", description="Static list of all known Battle.net/Activision/Microsoft products, flagged with current prefill selection.")
 def get_catalog():
     selected = set(prefill_selection.read_selection(settings.battlenet_prefill_config_dir))
-    return {
-        "products": [
-            {
-                "code": p.code,
-                "name": p.display_name,
-                "publisher": p.publisher,
-                "selected": p.code in selected,
-            }
-            for p in BATTLENET_CATALOG
-        ]
-    }
+    products = [
+        {
+            "code": p.code,
+            "name": p.display_name,
+            "publisher": p.publisher,
+            "selected": p.code in selected,
+        }
+        for p in BATTLENET_CATALOG
+    ]
+
+    griddb_key = app_settings_store.get_settings().get("steamgriddb_api_key") or ""
+    cover_art.enrich_by_name(products, "name", griddb_key)
+
+    return {"products": products}
 
 
 @router.get("/selection", summary="Current Battle.net prefill selection")

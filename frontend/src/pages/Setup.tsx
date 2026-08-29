@@ -19,16 +19,16 @@ export function Setup() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (password !== passwordConfirm) {
-      toast.error("Passwörter stimmen nicht überein.");
+      toast.error(t("setup.passwordMismatch"));
       return;
     }
     setSubmitting(true);
     try {
       await api.authSetup(username, password);
-      toast.success("Zugang eingerichtet.");
+      toast.success(t("setup.setupComplete"));
       await refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Einrichtung fehlgeschlagen");
+      toast.error(err instanceof Error ? err.message : t("setup.setupFailed"));
     } finally {
       setSubmitting(false);
     }

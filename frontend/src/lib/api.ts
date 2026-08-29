@@ -53,6 +53,7 @@ export interface SteamGame {
   playtime_minutes: number;
   last_played: number;
   icon_url: string | null;
+  cover_url: string | null;
   selected: boolean;
 }
 
@@ -60,12 +61,14 @@ export interface BattleNetProductDto {
   code: string;
   name: string;
   publisher: string;
+  cover_url: string | null;
   selected: boolean;
 }
 
 export interface AppSettings {
   steam_api_key: string;
   steam_id64: string;
+  steamgriddb_api_key: string;
 }
 
 export interface SteamSizeStatus {
