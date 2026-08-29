@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   AlertTriangle,
@@ -6,6 +6,7 @@ import {
   ArrowDownCircle,
   ArrowUp,
   CheckCircle2,
+  Download,
   Eye,
   EyeOff,
   Gauge,
@@ -14,6 +15,7 @@ import {
   Pause,
   Play,
   ScanSearch,
+  Search,
   Server,
   Settings2,
   Trash2,
@@ -36,6 +38,7 @@ import {
   type TrafficWindow,
 } from "@/lib/api";
 import { formatBytes, formatPercent, formatUptime, cn } from "@/lib/utils";
+import { downloadCsv } from "@/lib/csv";
 import { useI18n } from "@/lib/i18n";
 import { getStoredLayout, saveLayout, resetLayout, type DashboardLayout, type WidgetId } from "@/lib/dashboardLayout";
 import { setDiagnosticsBadge, clearDiagnosticsBadge } from "@/lib/diagnosticsBadge";
@@ -74,6 +77,7 @@ export function Dashboard() {
   const [customizing, setCustomizing] = useState(false);
   const [trafficWindow, setTrafficWindow] = useState<TrafficWindow>("24h");
   const [autoRefresh, setAutoRefresh] = useState(() => getStoredAutoRefresh());
+  const [historySearch, setHistorySearch] = useState("");
 
   const loadAll = useCallback(
     (window: TrafficWindow) => {
@@ -206,6 +210,41 @@ export function Dashboard() {
   function handleResetLayout() {
     setLayout(resetLayout());
   }
+
+  function handleExportCsv() {
+    if (!stats) return;
+    const rows: (string | number)[][] = [
+      ["metric", "value"],
+      ["hit_ratio", stats.overall.hit_ratio],
+      ["hit_bytes", stats.overall.hit_bytes],
+      ["miss_bytes", stats.overall.miss_bytes],
+      ["bandwidth_saved_bytes", stats.overall.bandwidth_saved_bytes],
+      ["total_requests", stats.overall.total_requests],
+      ["hit_requests", stats.overall.hit_requests],
+      ["miss_requests", stats.overall.miss_requests],
+      [],
+      ["service", "hit_bytes", "miss_bytes", "total_bytes", "hit_ratio", "last_seen"],
+      ...stats.services.map((s) => [s.service, s.hit_bytes, s.miss_bytes, s.total_bytes, s.hit_ratio, s.last_seen ?? ""]),
+    ];
+    downloadCsv(`cachepanel-stats-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  }
+
+  // Search matches the service's display label (e.g. "Battle.net") or its
+  // status text (localized "erfolgreich" / "Exit-Code 1") -- covers the two
+  // things a search over a short run-history list is actually useful for,
+  // same scope as Steam.tsx's name-only search since there's no other
+  // meaningfully searchable field on a run-history entry.
+  const filteredHistory = useMemo(() => {
+    if (!history) return [];
+    const q = historySearch.trim().toLowerCase();
+    if (!q) return history;
+    return history.filter((run) => {
+      const label = (SERVICE_LABEL[run.service] ?? run.service).toLowerCase();
+      const status =
+        run.exit_code === 0 ? t("dashboard.runSuccessful").toLowerCase() : `exit-code ${run.exit_code}`;
+      return label.includes(q) || status.includes(q) || run.service.toLowerCase().includes(q);
+    });
+  }, [history, historySearch, t]);
 
   if (error) {
     return (
@@ -353,24 +392,40 @@ export function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="flex flex-col divide-y divide-[var(--border)]">
-              {history.map((run, i) => (
-                <div key={i} className="flex items-center justify-between px-5 py-2.5 text-sm">
-                  <div className="flex items-center gap-3">
-                    <Badge variant={run.exit_code === 0 ? "ok" : "warn"}>
-                      {SERVICE_LABEL[run.service] ?? run.service}
-                    </Badge>
+            <div className="px-5 pb-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--muted)]" />
+                <input
+                  type="text"
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  placeholder={t("dashboard.runHistorySearchPlaceholder")}
+                  className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] pl-8 pr-2.5 text-sm outline-none focus:border-[var(--accent)]"
+                />
+              </div>
+            </div>
+            {filteredHistory.length === 0 ? (
+              <p className="px-5 pb-4 text-sm text-[var(--muted)]">{t("dashboard.runHistoryNoMatch")}</p>
+            ) : (
+              <div className="flex flex-col divide-y divide-[var(--border)]">
+                {filteredHistory.map((run, i) => (
+                  <div key={i} className="flex items-center justify-between px-5 py-2.5 text-sm">
+                    <div className="flex items-center gap-3">
+                      <Badge variant={run.exit_code === 0 ? "ok" : "warn"}>
+                        {SERVICE_LABEL[run.service] ?? run.service}
+                      </Badge>
+                      <span className="text-[var(--muted)]">
+                        {new Date(run.started_at).toLocaleString(locale)}
+                      </span>
+                    </div>
                     <span className="text-[var(--muted)]">
-                      {new Date(run.started_at).toLocaleString(locale)}
+                      {run.exit_code === 0 ? t("dashboard.runSuccessful") : `Exit-Code ${run.exit_code}`} ·{" "}
+                      {run.duration_seconds.toFixed(1)}s
                     </span>
                   </div>
-                  <span className="text-[var(--muted)]">
-                    {run.exit_code === 0 ? t("dashboard.runSuccessful") : `Exit-Code ${run.exit_code}`} ·{" "}
-                    {run.duration_seconds.toFixed(1)}s
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       ),
@@ -525,6 +580,9 @@ export function Dashboard() {
           >
             {autoRefresh ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             {autoRefresh ? t("dashboard.autoRefresh.on") : t("dashboard.autoRefresh.off")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportCsv} title={t("dashboard.exportCsv")}>
+            <Download className="h-3.5 w-3.5" /> {t("dashboard.exportCsv")}
           </Button>
           {customizing && (
             <Button variant="outline" size="sm" onClick={handleResetLayout}>

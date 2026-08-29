@@ -23,6 +23,7 @@ from app.routers import (
     settings,
     steam,
     steam_size,
+    users,
 )
 from app.services import db, scheduler_service, session_secret
 
@@ -76,6 +77,7 @@ app.include_router(export_import.router)
 app.include_router(schedule.router)
 app.include_router(metrics.router)
 app.include_router(backup.router)
+app.include_router(users.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 

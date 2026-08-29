@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Archive, Bell, CheckCircle2, Download, Image, Info, KeyRound, LogIn, Palette, Send, Sparkles, Upload } from "lucide-react";
+import { AlertCircle, Archive, Bell, CheckCircle2, Download, Image, Info, KeyRound, LogIn, Palette, Send, Sparkles, Trash2, Upload, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScheduleCard } from "@/components/ScheduleCard";
-import { api, type AppSettings, type BackupBundle, type ExportBundle, type UpdateCheckResult, type VersionInfo } from "@/lib/api";
+import { api, type AppSettings, type BackupBundle, type ExportBundle, type PanelUser, type UpdateCheckResult, type VersionInfo } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { ACCENTS, getStoredAccent, setAccent, type Accent } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -22,14 +22,27 @@ export function Settings() {
   const [version, setVersion] = useState<VersionInfo | null>(null);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [restoringBackup, setRestoringBackup] = useState(false);
+  const [users, setUsers] = useState<PanelUser[] | null>(null);
+  const [newUsername, setNewUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [addingUser, setAddingUser] = useState(false);
+  const [removingUser, setRemovingUser] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const backupFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function reloadUsers() {
+    api
+      .listUsers()
+      .then((data) => setUsers(data.users))
+      .catch(() => setUsers(null));
+  }
 
   useEffect(() => {
     api
       .getSettings()
       .then(setValues)
       .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
+    reloadUsers();
 
     api.getVersion().then(setVersion).catch(() => setVersion(null));
     // Single one-shot check, not a poller -- see update_check.py's docstring
@@ -48,6 +61,36 @@ export function Settings() {
   function handleAccentChange(next: Accent) {
     setAccent(next);
     setAccentState(next);
+  }
+
+  async function handleAddUser(e: FormEvent) {
+    e.preventDefault();
+    setAddingUser(true);
+    try {
+      await api.addUser(newUsername.trim(), newPassword);
+      setNewUsername("");
+      setNewPassword("");
+      toast.success(t("settings.usersAdded"));
+      reloadUsers();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.usersAddFailed"));
+    } finally {
+      setAddingUser(false);
+    }
+  }
+
+  async function handleRemoveUser(username: string) {
+    if (!window.confirm(t("settings.usersRemoveConfirm"))) return;
+    setRemovingUser(username);
+    try {
+      await api.removeUser(username);
+      toast.success(t("settings.usersRemoved"));
+      reloadUsers();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.usersRemoveFailed"));
+    } finally {
+      setRemovingUser(null);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -199,6 +242,63 @@ export function Settings() {
               />
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-4 w-4" /> {t("settings.users")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <p className="text-xs text-[var(--muted)]">{t("settings.usersHint")}</p>
+
+          {users === null ? (
+            <p className="text-sm text-[var(--muted)]">{t("settings.usersLoadFailed")}</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+              {users.map((u) => (
+                <div key={u.username} className="flex items-center justify-between px-3 py-2 text-sm">
+                  <span className="font-medium">{u.username}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={users.length <= 1 || removingUser === u.username}
+                    onClick={() => handleRemoveUser(u.username)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> {t("settings.usersRemove")}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={handleAddUser} className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-end">
+            <div className="flex flex-1 flex-col gap-1.5">
+              <label htmlFor="new_username" className="text-sm font-medium">
+                {t("settings.usersAddUsername")}
+              </label>
+              <Input id="new_username" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} required />
+            </div>
+            <div className="flex flex-1 flex-col gap-1.5">
+              <label htmlFor="new_password" className="text-sm font-medium">
+                {t("settings.usersAddPassword")}
+              </label>
+              <Input
+                id="new_password"
+                type="password"
+                minLength={8}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" disabled={addingUser}>
+              <UserPlus className="h-4 w-4" /> {addingUser ? t("settings.usersAdding") : t("settings.usersAdd")}
+            </Button>
+          </form>
         </CardContent>
       </Card>
 

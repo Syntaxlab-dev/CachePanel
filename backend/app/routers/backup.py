@@ -24,16 +24,17 @@ better handled by backing up the whole `data/` volume (including
 .encryption_key) at the infrastructure level, same as any other self-hosted
 app's persistent volume.
 
-The bcrypt password hash (panel login), by contrast, IS included as-is --
-see auth_credentials_store.py's own reasoning: a bcrypt hash is already
+The bcrypt password hashes (panel logins), by contrast, ARE included as-is
+-- see auth_credentials_store.py's own reasoning: a bcrypt hash is already
 safe to store/expose, wrapping it in another encryption layer wouldn't add
-real protection.
+real protection. Since Welle 4 (multi-user panel logins) this is every
+account, not just one.
 """
 
 import base64
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.services import app_settings_store, auth_credentials_store, run_history_store, schedule_store
 
@@ -47,7 +48,10 @@ class BackupBundle(BaseModel):
     settings_encrypted: str
     schedule: dict[str, dict]
     run_history: list[dict]
-    auth: dict[str, str] | None = None
+    # Accepts both the current list-of-accounts shape and a pre-Welle-4
+    # single-object backup (normalized to a one-item list in restore_backup
+    # below), so an older backup file still restores after this upgrade.
+    auth: list[dict[str, str]] | dict[str, str] | None = Field(default_factory=list)
 
 
 @router.get(
@@ -95,6 +99,7 @@ def restore_backup(bundle: BackupBundle):
     schedule_store.update_schedule(bundle.schedule)
     run_history_store.replace_all(bundle.run_history)
     if bundle.auth:
-        auth_credentials_store.restore_credentials(bundle.auth["username"], bundle.auth["password_hash"])
+        users = [bundle.auth] if isinstance(bundle.auth, dict) else bundle.auth
+        auth_credentials_store.restore_credentials(users)
 
     return {"ok": True}

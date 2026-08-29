@@ -123,6 +123,10 @@ export interface ExportBundle {
   epic_app_ids: string[];
 }
 
+export interface PanelUser {
+  username: string;
+}
+
 export interface BackupBundle {
   schema_version: number;
   // Base64-encoded, still Fernet-encrypted on the backend -- the frontend
@@ -132,7 +136,10 @@ export interface BackupBundle {
   settings_encrypted: string;
   schedule: ScheduleConfigLike;
   run_history: RunHistoryEntry[];
-  auth: { username: string; password_hash: string } | null;
+  // Every panel account's {username, password_hash} since Welle 4 --
+  // accepts an older single-object backup on restore too, the backend
+  // normalizes that shape.
+  auth: { username: string; password_hash: string }[] | { username: string; password_hash: string } | null;
 }
 
 // ScheduleConfig itself is defined further down, after this type is used --
@@ -239,6 +246,12 @@ export const api = {
   authLogin: (username: string, password: string) =>
     request<{ ok: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   authLogout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+
+  listUsers: () => request<{ users: PanelUser[] }>("/api/users"),
+  addUser: (username: string, password: string) =>
+    request<{ ok: boolean }>("/api/users", { method: "POST", body: JSON.stringify({ username, password }) }),
+  removeUser: (username: string) =>
+    request<{ ok: boolean }>(`/api/users/${encodeURIComponent(username)}`, { method: "DELETE" }),
 
   getSchedule: () => request<ScheduleConfig>("/api/schedule"),
   saveSchedule: (partial: Partial<ScheduleConfig>) =>

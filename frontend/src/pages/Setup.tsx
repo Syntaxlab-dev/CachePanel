@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from "react";
-import { Database, ShieldCheck } from "lucide-react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { Database, ShieldCheck, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
+import { api, type BackupBundle } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 
@@ -15,6 +15,8 @@ export function Setup() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const restoreFileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -31,6 +33,29 @@ export function Setup() {
       toast.error(err instanceof Error ? err.message : t("setup.setupFailed"));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function handleRestoreClick() {
+    restoreFileInputRef.current?.click();
+  }
+
+  async function handleRestoreFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setRestoring(true);
+    try {
+      const text = await file.text();
+      const bundle = JSON.parse(text) as BackupBundle;
+      await api.restoreBackup(bundle);
+      toast.success(t("setup.restoreComplete"));
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? `${t("setup.restoreFailed")} ${err.message}` : t("setup.restoreFailed"));
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -91,6 +116,20 @@ export function Setup() {
                 {submitting ? t("setup.submitting") : t("setup.submit")}
               </Button>
             </form>
+
+            <div className="mt-4 border-t border-[var(--border)] pt-4">
+              <p className="mb-2 text-xs text-[var(--muted)]">{t("setup.restoreHint")}</p>
+              <Button type="button" variant="outline" className="w-full gap-2" disabled={restoring} onClick={handleRestoreClick}>
+                <Upload className="h-4 w-4" /> {restoring ? t("setup.restoring") : t("setup.restoreButton")}
+              </Button>
+              <input
+                ref={restoreFileInputRef}
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={handleRestoreFile}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>

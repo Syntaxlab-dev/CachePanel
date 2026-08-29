@@ -6,11 +6,22 @@ own auth) plus anything outside /api/ entirely (static assets and the SPA
 shell, which the frontend itself gates by checking auth status client-side
 and showing a login/setup screen instead of the real app).
 
-While no credentials have been set up yet (first run), every /api/ route
-other than /api/auth/* is blocked -- this forces whoever opens the panel
-first to go through setup before anything else works, rather than leaving
-it wide open indefinitely just because nobody happened to set a password
-yet.
+While no credentials have been set up yet (first run, or the ./data volume
+was lost and recreated), every /api/ route other than /api/auth/* is
+blocked -- this forces whoever opens the panel first to go through setup
+(or a restore) before anything else works, rather than leaving it wide open
+indefinitely just because nobody happened to set a password yet.
+
+POST /api/backup/restore is exempted from that block specifically -- it's
+the same trust model as /api/auth/setup itself (whoever gets there first on
+an unconfigured instance claims it), and backup.py's own restore feature is
+documented as existing precisely for the "./data got wiped, container got
+recreated" case. Without this exemption that recovery path is impossible:
+restoring the account that used to exist would require already being
+logged in as it. Once an account exists, this path goes back to requiring
+normal auth like any other -- restoring over a live, already-configured
+panel still needs a valid session, so an unauthenticated caller can't use
+this to hijack or wipe someone else's panel.
 """
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -20,6 +31,7 @@ from starlette.responses import JSONResponse
 from app.services import auth_credentials_store
 
 _EXEMPT_PREFIX = "/api/auth/"
+_SETUP_EXEMPT_PATHS = {"/api/backup/restore"}
 
 
 class AuthGuardMiddleware(BaseHTTPMiddleware):
@@ -33,6 +45,8 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if not auth_credentials_store.is_configured():
+            if path in _SETUP_EXEMPT_PATHS:
+                return await call_next(request)
             return JSONResponse({"detail": "setup_required"}, status_code=401)
 
         if not request.session.get("authenticated"):
