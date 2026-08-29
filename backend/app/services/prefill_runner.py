@@ -4,6 +4,7 @@ Equivalent to `docker exec <container> <Binary> prefill [flags]`, but
 callable from the web UI instead of a terminal.
 """
 
+import logging
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ from dataclasses import dataclass
 import docker
 from docker.errors import DockerException, NotFound
 
-from app.services import run_history_store
+from app.services import app_settings_store, discord_notifier, run_history_store
 from app.settings import settings
 
 PREFILL_COMMANDS: dict[str, tuple[str, list[str]]] = {
@@ -32,6 +33,25 @@ class PrefillRunnerError(RuntimeError):
     pass
 
 
+def _notify_run_result(service: str, exit_code: int, duration_seconds: float) -> None:
+    """Fires the configured Discord notification for a finished run, if any
+    -- covers both manual (trigger_prefill) and scheduled (via
+    scheduler_service, which also calls trigger_prefill) runs, plus the SSE
+    live-log path (stream_prefill) below. Never raises: a webhook failure
+    must not turn a successful/failed prefill run into a 500."""
+    try:
+        cfg = app_settings_store.get_settings()
+        webhook_url = cfg.get("discord_webhook_url") or ""
+        if not webhook_url:
+            return
+        if exit_code == 0 and cfg.get("discord_notify_success"):
+            discord_notifier.notify_prefill_success(webhook_url, service, duration_seconds)
+        elif exit_code != 0 and cfg.get("discord_notify_failure"):
+            discord_notifier.notify_prefill_failure(webhook_url, service, exit_code)
+    except Exception:
+        logging.getLogger("cachepanel.discord").exception("Failed to send prefill-result notification")
+
+
 def trigger_prefill(service: str) -> PrefillRunResult:
     client, container, command = _get_container(service)
 
@@ -40,8 +60,10 @@ def trigger_prefill(service: str) -> PrefillRunResult:
 
     exit_code, output = container.exec_run(command, demux=False)
     decoded = output.decode("utf-8", errors="replace") if output else ""
+    duration = time.monotonic() - t0
 
-    run_history_store.add_entry(service, started_at, exit_code, time.monotonic() - t0)
+    run_history_store.add_entry(service, started_at, exit_code, duration)
+    _notify_run_result(service, exit_code, duration)
 
     return PrefillRunResult(service=service, exit_code=exit_code, output=decoded[-4000:])
 
@@ -102,5 +124,6 @@ def stream_prefill(client, container, command, service: str) -> Iterator[str]:
     duration = time.monotonic() - t0
 
     run_history_store.add_entry(service, started_at, exit_code, duration)
+    _notify_run_result(service, exit_code, duration)
 
     yield f"event: done\ndata: {exit_code}\n\n"

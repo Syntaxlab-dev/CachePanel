@@ -69,6 +69,10 @@ export interface AppSettings {
   steam_api_key: string;
   steam_id64: string;
   steamgriddb_api_key: string;
+  discord_webhook_url: string;
+  discord_notify_success: boolean;
+  discord_notify_failure: boolean;
+  discord_notify_disk_warning: boolean;
 }
 
 export interface SteamSizeStatus {
@@ -170,6 +174,11 @@ export const api = {
   getSettings: () => request<AppSettings>("/api/settings"),
   saveSettings: (partial: Partial<AppSettings>) =>
     request<AppSettings>("/api/settings", { method: "POST", body: JSON.stringify(partial) }),
+  testDiscordWebhook: (webhookUrl: string) =>
+    request<{ message: string }>("/api/settings/notifications/test", {
+      method: "POST",
+      body: JSON.stringify({ webhook_url: webhookUrl }),
+    }),
 
   health: () => request<HealthStatus>("/api/health"),
 

@@ -186,6 +186,19 @@ const dictionaries = {
     "settings.steamgriddbHintSuffix": "zeigen die Steam- und Battle.net-Listen Cover-Art an.",
     "settings.steamgriddbLabel": "SteamGridDB API-Key",
 
+    "settings.notifications": "Benachrichtigungen",
+    "settings.discordWebhookLabel": "Discord-Webhook-URL",
+    "settings.discordWebhookHintPrefix": "Optional — Anleitung zum Erstellen eines Webhooks in den",
+    "settings.discordWebhookHintLinkText": "Discord-Kanaleinstellungen",
+    "settings.discordWebhookHintSuffix": "Leer lassen, um Benachrichtigungen zu deaktivieren.",
+    "settings.discordTest": "Test senden",
+    "settings.discordTesting": "Sende…",
+    "settings.discordTestSentNotice": "Test-Nachricht gesendet — im Discord-Kanal prüfen.",
+    "settings.discordTestFailed": "Test-Nachricht konnte nicht gesendet werden.",
+    "settings.discordNotifySuccess": "Bei erfolgreichem Prefill-Lauf benachrichtigen",
+    "settings.discordNotifyFailure": "Bei fehlgeschlagenem Prefill-Lauf benachrichtigen",
+    "settings.discordNotifyDiskWarning": "Bei Cache-Speicherwarnung (ab 90% belegt) benachrichtigen",
+
     "schedule.legacyWarning":
       "Der alte feste Zeitplan (02:00/23:00 Uhr) in den einzelnen Prefill-Containern läuft aktuell parallel weiter, bis er manuell deaktiviert wird.",
     "schedule.saved": "Zeitplan gespeichert.",
@@ -374,6 +387,19 @@ const dictionaries = {
     "settings.steamgriddbHintPrefix": "Optional — with a free API key from",
     "settings.steamgriddbHintSuffix": "the Steam and Battle.net lists show cover art.",
     "settings.steamgriddbLabel": "SteamGridDB API key",
+
+    "settings.notifications": "Notifications",
+    "settings.discordWebhookLabel": "Discord webhook URL",
+    "settings.discordWebhookHintPrefix": "Optional — instructions for creating a webhook in the",
+    "settings.discordWebhookHintLinkText": "Discord channel settings",
+    "settings.discordWebhookHintSuffix": "Leave blank to disable notifications.",
+    "settings.discordTest": "Send test",
+    "settings.discordTesting": "Sending…",
+    "settings.discordTestSentNotice": "Test message sent — check your Discord channel.",
+    "settings.discordTestFailed": "Could not send the test message.",
+    "settings.discordNotifySuccess": "Notify on successful prefill run",
+    "settings.discordNotifyFailure": "Notify on failed prefill run",
+    "settings.discordNotifyDiskWarning": "Notify on cache disk warning (90%+ full)",
 
     "schedule.legacyWarning":
       "The old fixed schedule (02:00/23:00) inside the individual prefill containers is still running in parallel until it's manually disabled.",

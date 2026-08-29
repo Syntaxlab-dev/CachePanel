@@ -76,6 +76,31 @@ A ready-made dashboard ships at
 add a Prometheus datasource in Grafana pointed at your scraper, then
 **Dashboards → New → Import** and pick that file.
 
+## Discord notifications
+
+Settings → Notifications accepts an optional Discord webhook URL (leave
+blank to disable). When set, CachePanel can post to it on a successful or
+failed prefill run, and on a cache disk usage warning (checked every 30
+minutes, fires once when crossing 90% used and again after dropping back
+below and re-crossing). A "Send test" button lets you verify the URL
+immediately. A webhook failure or timeout only logs a warning — it never
+breaks a prefill run.
+
+## Deploying on Unraid / TrueNAS SCALE
+
+- **Unraid**: [`unraid/cachepanel.xml`](unraid/cachepanel.xml) is a
+  Community Applications template, written against this project's own
+  `docker-compose.yml`. Not yet submitted to Community Applications — that
+  requires a published `ghcr.io` image, which doesn't exist until this
+  project's GHCR publishing workflow ships. Usable manually today via
+  Docker Compose Manager or by adding it as a custom template in the interim.
+- **TrueNAS SCALE** (25.04 "Fangtooth" and later): see
+  [`truenas/README.md`](truenas/README.md) — SCALE's Apps screen runs plain
+  Docker Compose natively now, so this project's own compose file works
+  as a Custom App with a few host-path adjustments. No official catalog
+  entry (that's a separate submission process to iXsystems' own repo,
+  out of scope here).
+
 ## API docs
 
 The backend's interactive API docs are available at `/docs` (Swagger UI) and

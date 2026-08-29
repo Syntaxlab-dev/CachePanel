@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<!--
+  Unraid Community Applications template for CachePanel.
+
+  NOT YET SUBMITTED to Community Applications: submission requires
+  Repository/Registry to point at a published image, and CachePanel is
+  currently only built locally (`build: .` in docker-compose.yml); no
+  ghcr.io image exists yet. This template is written against the intended
+  `ghcr.io/syntaxlab-dev/cachepanel:latest` path from Wave 10 (GHCR
+  publishing) and is ready to submit once that image exists; see
+  unraid/README.md.
+
+  Schema verified live against Unraid's own starter template
+  (github.com/unraid/unraid-community-apps-starter, templates/example-app.xml)
+  on 2026-08-29, not written from memory.
+-->
+<Container version="2">
+  <Name>CachePanel</Name>
+  <Repository>ghcr.io/syntaxlab-dev/cachepanel:latest</Repository>
+  <Registry>https://ghcr.io/syntaxlab-dev/cachepanel</Registry>
+  <Network>bridge</Network>
+
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+
+  <WebUI>http://[IP]:[PORT:8000]</WebUI>
+
+  <Overview>
+CachePanel is a self-hosted, open-source web dashboard for a LanCache setup. It replaces the terminal-only Steam/Battle.net/Epic prefill tool selection and DeveLanCacheUI with one modern interface: cache hit/miss dashboard with per-service and per-client stats, Steam library browsing via the Steam Web API (with cover art), a Battle.net/Epic product picker, per-service prefill scheduling, live prefill log streaming, DNS/cache-reachability diagnostics, cache corruption scanning, Prometheus metrics, and optional Discord notifications.
+
+Requires an existing LanCache setup (lancache + lancache-dns) and the tpill90 SteamPrefill/BattleNetPrefill/EpicPrefill containers already running -- CachePanel is a UI/controller for those, not a replacement for them. It needs access to their container config directories (to write game selections) and to the Docker socket (to trigger prefill runs and read container status).
+  </Overview>
+
+  <Support>https://github.com/Syntaxlab-dev/CachePanel/issues</Support>
+  <Project>https://github.com/Syntaxlab-dev/CachePanel</Project>
+  <TemplateURL>https://raw.githubusercontent.com/Syntaxlab-dev/CachePanel/main/unraid/cachepanel.xml</TemplateURL>
+  <ReadMe>https://raw.githubusercontent.com/Syntaxlab-dev/CachePanel/main/README.md</ReadMe>
+
+  <Category>Tools: Downloaders:</Category>
+
+  <ExtraSearchTerms>lancache steam battlenet epic prefill cache dashboard gameserver</ExtraSearchTerms>
+  <Requires>An existing LanCache (lancache + lancache-dns) setup, plus the tpill90 SteamPrefill/BattleNetPrefill/EpicPrefill containers already deployed.</Requires>
+
+  <License>MIT</License>
+
+  <!-- Web UI port. Container listens on 8000 internally (see Dockerfile). -->
+  <Config Name="WebUI Port" Target="8000" Default="8090" Mode="tcp" Description="Host port for the CachePanel web interface." Type="Port" Display="always" Required="true" Mask="false"/>
+
+  <!-- Persistent CachePanel data: encrypted settings, run history, schedule, panel login. -->
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/cachepanel" Mode="rw" Description="CachePanel's own data: encrypted settings, prefill run history, schedule, panel login." Type="Path" Display="always" Required="true" Mask="false"/>
+
+  <!-- Docker socket, so CachePanel can trigger prefill runs and read container/health status. -->
+  <Config Name="Docker Socket" Target="/var/run/docker.sock" Default="/var/run/docker.sock" Mode="ro" Description="Lets CachePanel trigger prefill runs and read lancache/lancache-dns/prefill container status. Read-only." Type="Path" Display="advanced" Required="true" Mask="false"/>
+
+  <!-- LanCache access logs, for the dashboard's traffic/hit-miss stats and diagnostics. -->
+  <Config Name="LanCache Logs" Target="/mnt/lancache/logs" Default="/mnt/user/appdata/lancache/logs" Mode="ro" Description="Path to your LanCache access logs (same volume your lancache container writes logs to). Read-only." Type="Path" Display="always" Required="true" Mask="false"/>
+
+  <!-- The three prefill tool config dirs; CachePanel writes game selections into these,
+       so they must be the SAME host paths your steam-prefill/battlenet-prefill/epic-prefill
+       containers already use, not new/empty directories. -->
+  <Config Name="Steam Prefill Config" Target="/opt/stacks/steam-prefill/config" Default="/mnt/user/appdata/steam-prefill/config" Mode="rw" Description="Same host path your steam-prefill container uses for its config -- CachePanel writes the selected-games list here." Type="Path" Display="always" Required="true" Mask="false"/>
+  <Config Name="Battle.net Prefill Config" Target="/opt/stacks/battlenet-prefill/config" Default="/mnt/user/appdata/battlenet-prefill/config" Mode="rw" Description="Same host path your battlenet-prefill container uses for its config." Type="Path" Display="always" Required="true" Mask="false"/>
+  <Config Name="Epic Prefill Config" Target="/opt/stacks/epic-prefill/config" Default="/mnt/user/appdata/epic-prefill/config" Mode="rw" Description="Same host path your epic-prefill container uses for its config." Type="Path" Display="always" Required="true" Mask="false"/>
+
+  <!-- Optional: powers the DNS/cache-reachability diagnostics on the dashboard. -->
+  <Config Name="LANCACHE_IP" Target="LANCACHE_IP" Default="" Mode="" Description="LAN IP of the machine running lancache + lancache-dns (often this same host). Leave blank to skip the DNS/reachability diagnostics checks." Type="Variable" Display="always" Required="false" Mask="false"/>
+
+  <!-- Optional: only needed if your prefill containers use non-default names. -->
+  <Config Name="STEAM_PREFILL_CONTAINER" Target="STEAM_PREFILL_CONTAINER" Default="steam-prefill" Mode="" Description="Container name of your steam-prefill container, if not the default." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="BATTLENET_PREFILL_CONTAINER" Target="BATTLENET_PREFILL_CONTAINER" Default="battlenet-prefill" Mode="" Description="Container name of your battlenet-prefill container, if not the default." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="EPIC_PREFILL_CONTAINER" Target="EPIC_PREFILL_CONTAINER" Default="epic-prefill" Mode="" Description="Container name of your epic-prefill container, if not the default." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+</Container>

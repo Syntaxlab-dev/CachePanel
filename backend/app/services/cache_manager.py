@@ -110,6 +110,47 @@ def scan_for_corruption(sample_limit: int = 20) -> CorruptionScanResult:
     return CorruptionScanResult(corrupt_file_count=total, sample_paths=sample, truncated=total > len(sample))
 
 
+@dataclass
+class DiskUsage:
+    total_bytes: int
+    used_bytes: int
+    percent_used: float
+
+
+def get_disk_usage() -> DiskUsage:
+    """Disk usage of the cache volume, read via `df` inside the lancache
+    container -- CachePanel itself doesn't have the cache directory mounted
+    (only docker.sock + logs + prefill config dirs), so this follows the
+    same exec_run-into-lancache pattern as scan_for_corruption() above
+    rather than requiring a new volume mount just for this.
+
+    percent_used comes from df's own Use% column rather than being
+    recomputed as used/total -- confirmed live these differ (66.4% vs 70%
+    on the real volume) because df's Use% is used/(used+available), which
+    correctly excludes the filesystem's blocks reserved for root (ext4
+    reserves ~5% by default). Recomputing our own percentage would make a
+    "cache disk nearly full" warning fire later than it should.
+    """
+    container = _get_lancache_container()
+    exit_code, output = container.exec_run(
+        ["sh", "-c", f"df -B1 {_CACHE_DIR_IN_CONTAINER} | tail -1"], demux=False
+    )
+    if exit_code != 0:
+        raise CacheManagerError(f"Disk-Nutzung konnte nicht ermittelt werden: {output.decode('utf-8', errors='replace')}")
+
+    # df -B1 columns: Filesystem 1B-blocks Used Available Use% Mounted-on
+    parts = output.decode(errors="replace").split()
+    if len(parts) < 5:
+        raise CacheManagerError(f"Unerwartete df-Ausgabe: {output.decode('utf-8', errors='replace')}")
+    total = int(parts[1])
+    used = int(parts[2])
+    try:
+        percent = float(parts[4].rstrip("%"))
+    except ValueError:
+        percent = (used / total * 100) if total else 0.0
+    return DiskUsage(total_bytes=total, used_bytes=used, percent_used=percent)
+
+
 def clean_corrupted_files() -> str:
     container = _get_lancache_container()
     # Re-scoped to the exact same criterion as scan_for_corruption() --

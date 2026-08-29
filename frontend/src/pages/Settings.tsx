@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, CheckCircle2, Download, Image, KeyRound, LogIn, Palette, Upload } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, Download, Image, KeyRound, LogIn, Palette, Send, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [loginNotice, setLoginNotice] = useState<"success" | "failed" | null>(null);
   const [importing, setImporting] = useState(false);
+  const [testingWebhook, setTestingWebhook] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -67,6 +68,19 @@ export function Settings() {
       toast.success(t("settings.exportedNotice"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("settings.exportFailed"));
+    }
+  }
+
+  async function handleTestWebhook() {
+    if (!values?.discord_webhook_url) return;
+    setTestingWebhook(true);
+    try {
+      await api.testDiscordWebhook(values.discord_webhook_url);
+      toast.success(t("settings.discordTestSentNotice"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.discordTestFailed"));
+    } finally {
+      setTestingWebhook(false);
     }
   }
 
@@ -246,6 +260,90 @@ export function Settings() {
             <div className="mt-4 flex items-center gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]">
               <AlertCircle className="h-4 w-4" /> {error}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-4 w-4" /> {t("settings.notifications")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!values ? (
+            <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="discord_webhook_url" className="text-sm font-medium">
+                  {t("settings.discordWebhookLabel")}
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="discord_webhook_url"
+                    placeholder="https://discord.com/api/webhooks/..."
+                    value={values.discord_webhook_url}
+                    onChange={(e) => setValues({ ...values, discord_webhook_url: e.target.value })}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!values.discord_webhook_url || testingWebhook}
+                    onClick={handleTestWebhook}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    {testingWebhook ? t("settings.discordTesting") : t("settings.discordTest")}
+                  </Button>
+                </div>
+                <p className="text-xs text-[var(--muted)]">
+                  {t("settings.discordWebhookHintPrefix")}{" "}
+                  <a
+                    href="https://support.discord.com/hc/en-us/articles/228383668"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    {t("settings.discordWebhookHintLinkText")}
+                  </a>
+                  . {t("settings.discordWebhookHintSuffix")}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 border-t border-[var(--border)] pt-4">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={values.discord_notify_success}
+                    onChange={(e) => setValues({ ...values, discord_notify_success: e.target.checked })}
+                  />
+                  {t("settings.discordNotifySuccess")}
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={values.discord_notify_failure}
+                    onChange={(e) => setValues({ ...values, discord_notify_failure: e.target.checked })}
+                  />
+                  {t("settings.discordNotifyFailure")}
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={values.discord_notify_disk_warning}
+                    onChange={(e) => setValues({ ...values, discord_notify_disk_warning: e.target.checked })}
+                  />
+                  {t("settings.discordNotifyDiskWarning")}
+                </label>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={saving}>
+                  {saving ? t("settings.saving") : t("settings.save")}
+                </Button>
+              </div>
+            </form>
           )}
         </CardContent>
       </Card>

@@ -23,6 +23,10 @@ _DEFAULTS = {
     "steam_api_key": "",
     "steam_id64": "",
     "steamgriddb_api_key": "",
+    "discord_webhook_url": "",
+    "discord_notify_success": True,
+    "discord_notify_failure": True,
+    "discord_notify_disk_warning": True,
 }
 
 
