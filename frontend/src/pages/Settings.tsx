@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Bell, CheckCircle2, Download, Image, KeyRound, LogIn, Palette, Send, Upload } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, Download, Image, Info, KeyRound, LogIn, Palette, Send, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScheduleCard } from "@/components/ScheduleCard";
-import { api, type AppSettings, type ExportBundle } from "@/lib/api";
+import { api, type AppSettings, type ExportBundle, type VersionInfo } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { ACCENTS, getStoredAccent, setAccent, type Accent } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ export function Settings() {
   const [loginNotice, setLoginNotice] = useState<"success" | "failed" | null>(null);
   const [importing, setImporting] = useState(false);
   const [testingWebhook, setTestingWebhook] = useState(false);
+  const [version, setVersion] = useState<VersionInfo | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -26,6 +27,8 @@ export function Settings() {
       .getSettings()
       .then(setValues)
       .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
+
+    api.getVersion().then(setVersion).catch(() => setVersion(null));
 
     const params = new URLSearchParams(window.location.search);
     const loginResult = params.get("steam_login");
@@ -371,6 +374,39 @@ export function Settings() {
               onChange={handleImportFile}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="h-4 w-4" /> {t("settings.about")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-1 text-sm text-[var(--muted)]">
+          <p>
+            {t("settings.aboutVersionPrefix")}:{" "}
+            {version?.git_sha_short ? (
+              <a
+                href={`${version.repo_url}/commit/${version.git_sha}`}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                {version.git_sha_short}
+              </a>
+            ) : (
+              t("settings.aboutDevBuild")
+            )}
+          </p>
+          <a
+            href={version?.repo_url ?? "https://github.com/Syntaxlab-dev/CachePanel"}
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2"
+          >
+            {t("settings.aboutRepoLink")}
+          </a>
         </CardContent>
       </Card>
     </div>

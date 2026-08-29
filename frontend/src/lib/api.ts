@@ -75,6 +75,12 @@ export interface AppSettings {
   discord_notify_disk_warning: boolean;
 }
 
+export interface VersionInfo {
+  git_sha: string;
+  git_sha_short: string;
+  repo_url: string;
+}
+
 export interface SteamSizeStatus {
   apps: { name: string; size: string }[];
   total_size: string | null;
@@ -179,6 +185,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ webhook_url: webhookUrl }),
     }),
+  getVersion: () => request<VersionInfo>("/api/settings/version"),
 
   health: () => request<HealthStatus>("/api/health"),
 

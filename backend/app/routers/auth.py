@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from app.services import app_settings_store, auth_credentials_store, steam_openid
+from app.services import app_settings_store, auth_credentials_store, login_rate_limit, steam_openid
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -41,10 +41,28 @@ def auth_setup(body: Credentials, request: Request):
     return {"ok": True}
 
 
-@router.post("/login", summary="Panel login")
+@router.post(
+    "/login",
+    summary="Panel login",
+    description="Rate-limited to 5 attempts per 5 minutes per client IP -- returns 429 with a Retry-After "
+    "header once exceeded, resets on a successful login.",
+)
 def auth_login(body: Credentials, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+
+    locked_out, retry_after = login_rate_limit.is_locked_out(client_ip)
+    if locked_out:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Zu viele Fehlversuche. Bitte in {retry_after} Sekunden erneut versuchen.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     if not auth_credentials_store.verify_credentials(body.username.strip(), body.password):
+        login_rate_limit.record_failure(client_ip)
         raise HTTPException(status_code=401, detail="Benutzername oder Passwort falsch.")
+
+    login_rate_limit.record_success(client_ip)
     request.session["authenticated"] = True
     request.session["username"] = body.username.strip()
     return {"ok": True}

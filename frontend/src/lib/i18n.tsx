@@ -175,6 +175,10 @@ const dictionaries = {
     "settings.importFailedGeneric": "Import fehlgeschlagen (ungültige Datei)",
     "settings.exportImportHint":
       "Sichert deine aktuelle Steam-/Battle.net-/Epic-Auswahl als Datei, oder spielt eine zuvor exportierte Datei wieder ein (z. B. für eine andere CachePanel-Instanz).",
+    "settings.about": "Über",
+    "settings.aboutVersionPrefix": "Version",
+    "settings.aboutDevBuild": "Lokaler Build (kein Git-Commit ermittelbar)",
+    "settings.aboutRepoLink": "Quellcode auf GitHub",
     "settings.appearance": "Darstellung",
     "settings.appearanceAccent": "Akzentfarbe",
     "accent.blue": "Blau",
@@ -386,6 +390,10 @@ const dictionaries = {
     "settings.importFailedGeneric": "Import failed (invalid file)",
     "settings.exportImportHint":
       "Backs up your current Steam/Battle.net/Epic selection as a file, or restores a previously exported file (e.g. for another CachePanel instance).",
+    "settings.about": "About",
+    "settings.aboutVersionPrefix": "Version",
+    "settings.aboutDevBuild": "Local build (no Git commit available)",
+    "settings.aboutRepoLink": "Source on GitHub",
     "settings.appearance": "Appearance",
     "settings.appearanceAccent": "Accent color",
     "accent.blue": "Blue",

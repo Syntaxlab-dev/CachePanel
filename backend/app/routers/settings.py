@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services import app_settings_store, discord_notifier
+from app.settings import settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -41,3 +42,17 @@ def test_notification(body: NotificationTestRequest):
     if not discord_notifier.send_test_message(body.webhook_url):
         raise HTTPException(status_code=400, detail="Could not deliver the test message -- check the webhook URL.")
     return {"message": "Test message sent."}
+
+
+@router.get(
+    "/version",
+    summary="Running version",
+    description="The Git commit SHA baked into this image at build time (see the Dockerfile's GIT_SHA build "
+    "arg), or empty for a plain local `docker compose build`.",
+)
+def get_version():
+    return {
+        "git_sha": settings.git_sha,
+        "git_sha_short": settings.git_sha[:7] if settings.git_sha else "",
+        "repo_url": "https://github.com/Syntaxlab-dev/CachePanel",
+    }

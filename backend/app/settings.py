@@ -27,6 +27,12 @@ class Settings:
     # Blank (default) = unchanged JSON-file behavior, zero config needed.
     database_url: str = os.environ.get("DATABASE_URL", "")
 
+    # Baked into the image at build time by the GHCR publish workflow
+    # (see the Dockerfile's GIT_SHA build arg) -- blank for a plain local
+    # `docker compose build`, where the About section shows "local build"
+    # instead of a commit link.
+    git_sha: str = os.environ.get("GIT_SHA", "")
+
     steam_prefill_container: str = os.environ.get("STEAM_PREFILL_CONTAINER", "steam-prefill")
     battlenet_prefill_container: str = os.environ.get("BATTLENET_PREFILL_CONTAINER", "battlenet-prefill")
     epic_prefill_container: str = os.environ.get("EPIC_PREFILL_CONTAINER", "epic-prefill")

@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.auth_guard import AuthGuardMiddleware
+from app.security_headers import SecurityHeadersMiddleware
 from app.routers import (
     auth,
     battlenet,
@@ -45,7 +46,11 @@ app = FastAPI(
 # as the OUTERMOST layer (it runs first on the way in). SessionMiddleware
 # must run before AuthGuardMiddleware so `request.session` is already
 # populated by the time the guard reads it -- so AuthGuardMiddleware is
-# added first (innermost), SessionMiddleware second (outermost).
+# added first (innermost), SessionMiddleware second. SecurityHeadersMiddleware
+# is added last (outermost) on purpose: AuthGuardMiddleware short-circuits
+# with an early JSONResponse for blocked/unauthenticated requests instead of
+# calling call_next -- for those responses to still get security headers,
+# SecurityHeadersMiddleware has to wrap AROUND it, not be wrapped BY it.
 app.add_middleware(AuthGuardMiddleware)
 app.add_middleware(
     SessionMiddleware,
@@ -54,6 +59,7 @@ app.add_middleware(
     same_site="lax",
     https_only=False,  # this typically sits behind a LAN reverse proxy or is hit directly over plain HTTP
 )
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(dashboard.router)
 app.include_router(steam.router)
