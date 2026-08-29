@@ -1,7 +1,8 @@
 services:
   cachepanel:
     build: .
-    # Or, once published: image: ghcr.io/<you>/cachepanel:latest
+    # Or, to skip the local build: image: ghcr.io/syntaxlab-dev/cachepanel:latest
+    # (published automatically on every push to main, see README's Setup section)
     container_name: cachepanel
     restart: unless-stopped
     ports:

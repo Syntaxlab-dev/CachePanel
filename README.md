@@ -1,5 +1,9 @@
 # CachePanel
 
+[![Docker publish](https://github.com/Syntaxlab-dev/CachePanel/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Syntaxlab-dev/CachePanel/actions/workflows/docker-publish.yml)
+[![License: MIT](https://img.shields.io/github/license/Syntaxlab-dev/CachePanel)](LICENSE)
+[![Image](https://img.shields.io/badge/image-ghcr.io%2Fsyntaxlab--dev%2Fcachepanel-blue)](https://github.com/Syntaxlab-dev/CachePanel/pkgs/container/cachepanel)
+
 > **Provided as-is, no warranty.** CachePanel is licensed under the [MIT License](LICENSE) —
 > use it at your own risk, the authors accept no liability for any damages arising from its use.
 
@@ -44,7 +48,14 @@ the base setup — CachePanel doesn't replace those, it drives them).
 2. Adjust the volume paths in `docker-compose.yml` if your prefill tools'
    config directories or LanCache log directory don't live at the defaults
    (`/opt/stacks/<tool>/config`, `/mnt/lancache/logs`).
-3. `docker compose up -d --build`
+3. Build from source, or use the published image — both work with the same
+   `docker-compose.yml`:
+   - **From source:** leave `build: .` as-is, `docker compose up -d --build`.
+   - **Published image:** every push to `main` publishes
+     `ghcr.io/syntaxlab-dev/cachepanel:latest` (see
+     [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)).
+     Swap the `build: .` line for `image: ghcr.io/syntaxlab-dev/cachepanel:latest`
+     and run `docker compose up -d` — no local build needed.
 4. Open `http://<host>:8090` and go to **Settings** to enter your own free
    [Steam Web API key](https://steamcommunity.com/dev/apikey) and
    [SteamID64](https://steamid.io/) — stored locally on your server, never
@@ -132,6 +143,12 @@ against someone who already has root/filesystem access to the host
 CachePanel runs on, since the key lives right next to the data it protects.
 For a single-container self-hosted tool there's no realistic way to clear
 that bar without an external secrets manager, which is out of scope here.
+
+## Contributing
+
+Bug reports, feature ideas, and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for local dev setup, code style, and the DE/EN translation contract. Issues labeled
+[`good first issue`](../../issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+are a reasonable place to start.
 
 ## License
 
