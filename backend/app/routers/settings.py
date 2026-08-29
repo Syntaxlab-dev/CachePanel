@@ -15,6 +15,7 @@ class SettingsUpdate(BaseModel):
     discord_notify_success: bool | None = None
     discord_notify_failure: bool | None = None
     discord_notify_disk_warning: bool | None = None
+    run_history_limit: int | None = None
 
 
 class NotificationTestRequest(BaseModel):

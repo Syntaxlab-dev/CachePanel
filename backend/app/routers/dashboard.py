@@ -1,6 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.services.log_parser import (
+    TRAFFIC_WINDOWS,
     aggregate_service_stats,
     client_stats,
     iter_access_entries,
@@ -16,11 +17,14 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
     "/stats",
     summary="Overall cache/traffic statistics",
     description="Aggregates the tail of the LanCache access log into overall + per-service hit/miss stats, "
-    "a recent-activity feed, a traffic timeline, and a per-client-IP top list.",
+    "a recent-activity feed, a traffic timeline (bucket size depends on `window`), and a per-client-IP top "
+    "list. `window` is one of 24h/7d/30d (default 24h); wider windows use coarser buckets and may show less "
+    "data than requested if the log tail read doesn't reach back that far.",
 )
-def get_stats():
+def get_stats(window: str = Query("24h", pattern="^(24h|7d|30d)$")):
     access_path = settings.lancache_log_dir / "access.log"
     entries = iter_access_entries(access_path, max_lines=100_000)
+    bucket_minutes, bucket_limit = TRAFFIC_WINDOWS[window]
 
     stats_by_service = aggregate_service_stats(entries)
 
@@ -58,6 +62,6 @@ def get_stats():
         },
         "services": services,
         "recent_activity": recent_activity(entries),
-        "timeline": traffic_timeline(entries),
+        "timeline": traffic_timeline(entries, bucket_minutes=bucket_minutes, limit=bucket_limit),
         "top_clients": client_stats(entries),
     }

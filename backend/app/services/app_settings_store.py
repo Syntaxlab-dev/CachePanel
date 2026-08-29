@@ -27,6 +27,7 @@ _DEFAULTS = {
     "discord_notify_success": True,
     "discord_notify_failure": True,
     "discord_notify_disk_warning": True,
+    "run_history_limit": 50,
 }
 
 

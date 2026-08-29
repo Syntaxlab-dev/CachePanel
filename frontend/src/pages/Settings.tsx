@@ -341,6 +341,24 @@ export function Settings() {
                 </label>
               </div>
 
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="run_history_limit" className="text-sm font-medium">
+                  {t("settings.runHistoryLimitLabel")}
+                </label>
+                <Input
+                  id="run_history_limit"
+                  type="number"
+                  min={10}
+                  max={500}
+                  className="max-w-32"
+                  value={values.run_history_limit}
+                  onChange={(e) =>
+                    setValues({ ...values, run_history_limit: Number(e.target.value) || 50 })
+                  }
+                />
+                <p className="text-xs text-[var(--muted)]">{t("settings.runHistoryLimitHint")}</p>
+              </div>
+
               <div className="flex items-center gap-3">
                 <Button type="submit" disabled={saving}>
                   {saving ? t("settings.saving") : t("settings.save")}

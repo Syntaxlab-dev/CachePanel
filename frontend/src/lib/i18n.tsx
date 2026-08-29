@@ -30,6 +30,13 @@ const dictionaries = {
     "dashboard.clearingCache": "Leert…",
     "dashboard.runHistory": "Download-Verlauf",
     "dashboard.trafficTimeline": "Traffic-Verlauf",
+    "dashboard.trafficWindow.24h": "24h",
+    "dashboard.trafficWindow.7d": "7 Tage",
+    "dashboard.trafficWindow.30d": "30 Tage",
+    "dashboard.autoRefresh.on": "Live",
+    "dashboard.autoRefresh.off": "Auto-Refresh",
+    "dashboard.autoRefresh.onHint": "Aktualisiert alle 30 Sekunden automatisch. Klicken zum Pausieren.",
+    "dashboard.autoRefresh.offHint": "Automatische Aktualisierung alle 30 Sekunden aktivieren.",
     "dashboard.trafficPerService": "Traffic pro Dienst",
     "dashboard.recentActivity": "Letzte Aktivität",
     "dashboard.noActivity": "Noch keine Download-Aktivität aufgezeichnet.",
@@ -76,6 +83,9 @@ const dictionaries = {
     "battlenet.save": "Auswahl speichern",
     "battlenet.selectAll": "Alle auswählen",
     "battlenet.deselectAll": "Alle abwählen",
+    "battlenet.search": "Produkte durchsuchen…",
+    "battlenet.selectAllMatches": "Treffer auswählen",
+    "battlenet.deselectAllMatches": "Treffer abwählen",
 
     "epic.title": "Epic Games",
     "epic.subtitle": "Epic hat keine öffentliche Bibliotheks-API — App-Namen/IDs manuell eintragen.",
@@ -149,6 +159,7 @@ const dictionaries = {
     "battlenet.productsAvailable": "Produkte verfügbar",
     "battlenet.productsSavedSuffix": "Produkte gespeichert.",
     "battlenet.loadingCatalog": "Lade Katalog…",
+    "battlenet.noResults": "Keine Treffer für",
 
     "epic.loadError": "Epic-Auswahl konnte nicht geladen werden:",
     "epic.alreadySelected": "Ist schon in der Auswahl.",
@@ -202,6 +213,8 @@ const dictionaries = {
     "settings.discordNotifySuccess": "Bei erfolgreichem Prefill-Lauf benachrichtigen",
     "settings.discordNotifyFailure": "Bei fehlgeschlagenem Prefill-Lauf benachrichtigen",
     "settings.discordNotifyDiskWarning": "Bei Cache-Speicherwarnung (ab 90% belegt) benachrichtigen",
+    "settings.runHistoryLimitLabel": "Anzahl gespeicherter Download-Läufe",
+    "settings.runHistoryLimitHint": "Wie viele Einträge im Download-Verlauf behalten werden (10–500). Ein niedrigerer Wert wirkt erst nach und nach bei künftigen Läufen, nicht rückwirkend.",
 
     "schedule.legacyWarning":
       "Der alte feste Zeitplan (02:00/23:00 Uhr) in den einzelnen Prefill-Containern läuft aktuell parallel weiter, bis er manuell deaktiviert wird.",
@@ -245,6 +258,13 @@ const dictionaries = {
     "dashboard.clearingCache": "Clearing…",
     "dashboard.runHistory": "Download history",
     "dashboard.trafficTimeline": "Traffic timeline",
+    "dashboard.trafficWindow.24h": "24h",
+    "dashboard.trafficWindow.7d": "7 days",
+    "dashboard.trafficWindow.30d": "30 days",
+    "dashboard.autoRefresh.on": "Live",
+    "dashboard.autoRefresh.off": "Auto-refresh",
+    "dashboard.autoRefresh.onHint": "Refreshes automatically every 30 seconds. Click to pause.",
+    "dashboard.autoRefresh.offHint": "Turn on automatic refresh every 30 seconds.",
     "dashboard.trafficPerService": "Traffic per service",
     "dashboard.recentActivity": "Recent activity",
     "dashboard.noActivity": "No download activity recorded yet.",
@@ -291,6 +311,9 @@ const dictionaries = {
     "battlenet.save": "Save selection",
     "battlenet.selectAll": "Select all",
     "battlenet.deselectAll": "Deselect all",
+    "battlenet.search": "Search products…",
+    "battlenet.selectAllMatches": "Select matches",
+    "battlenet.deselectAllMatches": "Deselect matches",
 
     "epic.title": "Epic Games",
     "epic.subtitle": "Epic has no public library API — add app names/IDs manually.",
@@ -364,6 +387,7 @@ const dictionaries = {
     "battlenet.productsAvailable": "products available",
     "battlenet.productsSavedSuffix": "products saved.",
     "battlenet.loadingCatalog": "Loading catalog…",
+    "battlenet.noResults": "No results for",
 
     "epic.loadError": "Could not load Epic selection:",
     "epic.alreadySelected": "Already in the selection.",
@@ -417,6 +441,8 @@ const dictionaries = {
     "settings.discordNotifySuccess": "Notify on successful prefill run",
     "settings.discordNotifyFailure": "Notify on failed prefill run",
     "settings.discordNotifyDiskWarning": "Notify on cache disk warning (90%+ full)",
+    "settings.runHistoryLimitLabel": "Download run history size",
+    "settings.runHistoryLimitHint": "How many entries to keep in the run history (10-500). A lower value only takes effect gradually on future runs, not retroactively.",
 
     "schedule.legacyWarning":
       "The old fixed schedule (02:00/23:00) inside the individual prefill containers is still running in parallel until it's manually disabled.",

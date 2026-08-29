@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckSquare, Save, Square } from "lucide-react";
+import { AlertCircle, CheckSquare, Save, Search, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PrefillRunPanel } from "@/components/PrefillRunPanel";
 import { api, type BattleNetProductDto } from "@/lib/api";
@@ -14,6 +15,7 @@ export function BattleNet() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     api
@@ -25,13 +27,18 @@ export function BattleNet() {
       .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
   }, []);
 
+  // Same "filter, then group" approach as Steam.tsx's search -- groups
+  // with no remaining matches just don't produce a key, so their <Card>
+  // disappears entirely rather than rendering empty.
   const grouped = useMemo(() => {
     if (!products) return {};
-    return products.reduce<Record<string, BattleNetProductDto[]>>((acc, p) => {
+    const q = search.trim().toLowerCase();
+    const matched = q ? products.filter((p) => p.name.toLowerCase().includes(q)) : products;
+    return matched.reduce<Record<string, BattleNetProductDto[]>>((acc, p) => {
       (acc[p.publisher] ??= []).push(p);
       return acc;
     }, {});
-  }, [products]);
+  }, [products, search]);
 
   function toggle(code: string) {
     setSelected((prev) => {
@@ -41,13 +48,22 @@ export function BattleNet() {
     });
   }
 
+  const filteredProducts = useMemo(() => Object.values(grouped).flat(), [grouped]);
+
   function selectAll() {
-    if (!products) return;
-    setSelected(new Set(products.map((p) => p.code)));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      filteredProducts.forEach((p) => next.add(p.code));
+      return next;
+    });
   }
 
   function selectNone() {
-    setSelected(new Set());
+    setSelected((prev) => {
+      const next = new Set(prev);
+      filteredProducts.forEach((p) => next.delete(p.code));
+      return next;
+    });
   }
 
   async function handleSave() {
@@ -91,14 +107,29 @@ export function BattleNet() {
       <PrefillRunPanel service="battlenet" />
 
       {products && products.length > 0 && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
+            <Input
+              placeholder={t("battlenet.search")}
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
           <Button variant="outline" size="sm" onClick={selectAll}>
-            <CheckSquare className="h-3.5 w-3.5" /> {t("battlenet.selectAll")}
+            <CheckSquare className="h-3.5 w-3.5" /> {search ? t("battlenet.selectAllMatches") : t("battlenet.selectAll")}
           </Button>
           <Button variant="outline" size="sm" onClick={selectNone}>
-            <Square className="h-3.5 w-3.5" /> {t("battlenet.deselectAll")}
+            <Square className="h-3.5 w-3.5" /> {search ? t("battlenet.deselectAllMatches") : t("battlenet.deselectAll")}
           </Button>
         </div>
+      )}
+
+      {products && filteredProducts.length === 0 && (
+        <p className="text-sm text-[var(--muted)]">
+          {t("battlenet.noResults")}: "{search}"
+        </p>
       )}
 
       {Object.entries(grouped).map(([publisher, items]) => (

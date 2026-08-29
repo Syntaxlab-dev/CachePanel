@@ -73,7 +73,10 @@ export interface AppSettings {
   discord_notify_success: boolean;
   discord_notify_failure: boolean;
   discord_notify_disk_warning: boolean;
+  run_history_limit: number;
 }
+
+export type TrafficWindow = "24h" | "7d" | "30d";
 
 export interface VersionInfo {
   git_sha: string;
@@ -157,7 +160,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  dashboardStats: () => request<DashboardStats>("/api/dashboard/stats"),
+  dashboardStats: (window: TrafficWindow = "24h") =>
+    request<DashboardStats>(`/api/dashboard/stats?window=${window}`),
 
   steamLibrary: () => request<{ games: SteamGame[] }>("/api/steam/library"),
   saveSteamSelection: (appIds: number[]) =>

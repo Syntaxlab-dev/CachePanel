@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 ACCESS_LOG_RE = re.compile(
@@ -207,6 +207,35 @@ def client_stats(entries: list[AccessEntry], limit: int = 20) -> list[dict]:
     return rows
 
 
+# bucket size/count per selectable dashboard time range. Wider windows use
+# coarser buckets on purpose -- a 30-day chart with 15-min buckets would be
+# thousands of points for no visual benefit. All three read from the same
+# already-tailed log entries (see dashboard.py's get_stats, max_lines=100_000)
+# rather than re-reading the file with a different line count; a window
+# wider than what that tail actually covers just renders with less data
+# than requested, it doesn't silently fabricate anything.
+TRAFFIC_WINDOWS: dict[str, tuple[int, int]] = {
+    "24h": (15, 96),
+    "7d": (120, 84),
+    "30d": (480, 90),
+}
+
+
+def _floor_to_bucket(ts: datetime, bucket_minutes: int) -> datetime:
+    """Rounds a timestamp down to the start of its bucket_minutes-wide
+    window. NOT the same as `ts.replace(minute=(ts.minute // bucket_minutes)
+    * bucket_minutes)` -- that only ever touches the minute field, which is
+    always 0-59, so for any bucket_minutes >= 60 the division is always 0
+    and the "bucket" silently degrades to per-hour regardless of the
+    requested width (found live: a 480-minute/8h bucket for the 30d window
+    was actually grouping per-hour, since 37 // 480 == 0 == 59 // 480).
+    Minutes-since-epoch avoids the field-range problem entirely."""
+    epoch = datetime(1970, 1, 1, tzinfo=ts.tzinfo)
+    minutes_since_epoch = int((ts - epoch).total_seconds() // 60)
+    bucket_index = minutes_since_epoch // bucket_minutes
+    return epoch + timedelta(minutes=bucket_index * bucket_minutes)
+
+
 def traffic_timeline(entries: list[AccessEntry], bucket_minutes: int = 15, limit: int = 48) -> list[dict]:
     """Same idea as recent_activity, but merged across all services into a
     single per-time-bucket series (for charting total traffic over time
@@ -215,9 +244,7 @@ def traffic_timeline(entries: list[AccessEntry], bucket_minutes: int = 15, limit
     """
     buckets: dict[str, dict] = {}
     for entry in entries:
-        bucket_key_dt = entry.timestamp.replace(
-            minute=(entry.timestamp.minute // bucket_minutes) * bucket_minutes, second=0, microsecond=0
-        )
+        bucket_key_dt = _floor_to_bucket(entry.timestamp, bucket_minutes)
         key = bucket_key_dt.isoformat()
         bucket = buckets.setdefault(
             key,

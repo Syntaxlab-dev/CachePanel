@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   AlertTriangle,
@@ -11,6 +11,8 @@ import {
   Gauge,
   HelpCircle,
   History,
+  Pause,
+  Play,
   ScanSearch,
   Server,
   Settings2,
@@ -31,10 +33,23 @@ import {
   type DiagnosticCheck,
   type HealthStatus,
   type RunHistoryEntry,
+  type TrafficWindow,
 } from "@/lib/api";
 import { formatBytes, formatPercent, formatUptime, cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { getStoredLayout, saveLayout, resetLayout, type DashboardLayout, type WidgetId } from "@/lib/dashboardLayout";
+
+const AUTO_REFRESH_KEY = "cachepanel-dashboard-autorefresh";
+const AUTO_REFRESH_INTERVAL_MS = 30_000;
+const TRAFFIC_WINDOWS: TrafficWindow[] = ["24h", "7d", "30d"];
+
+function getStoredAutoRefresh(): boolean {
+  try {
+    return localStorage.getItem(AUTO_REFRESH_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 const SERVICE_LABEL: Record<string, string> = {
   steam: "Steam",
@@ -56,22 +71,54 @@ export function Dashboard() {
   const [cleaning, setCleaning] = useState(false);
   const [layout, setLayout] = useState<DashboardLayout>(() => getStoredLayout());
   const [customizing, setCustomizing] = useState(false);
+  const [trafficWindow, setTrafficWindow] = useState<TrafficWindow>("24h");
+  const [autoRefresh, setAutoRefresh] = useState(() => getStoredAutoRefresh());
+
+  const loadAll = useCallback(
+    (window: TrafficWindow) => {
+      api
+        .dashboardStats(window)
+        .then(setStats)
+        .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
+      api.health().then(setHealth).catch(() => setHealth(null));
+      api
+        .runHistory()
+        .then((data) => setHistory(data.runs))
+        .catch(() => setHistory(null));
+      api
+        .diagnostics()
+        .then((data) => setChecks(data.checks))
+        .catch(() => setChecks(null));
+    },
+    [t],
+  );
 
   useEffect(() => {
-    api
-      .dashboardStats()
-      .then(setStats)
-      .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
-    api.health().then(setHealth).catch(() => setHealth(null));
-    api
-      .runHistory()
-      .then((data) => setHistory(data.runs))
-      .catch(() => setHistory(null));
-    api
-      .diagnostics()
-      .then((data) => setChecks(data.checks))
-      .catch(() => setChecks(null));
-  }, []);
+    loadAll(trafficWindow);
+  }, [trafficWindow, loadAll]);
+
+  // Auto-refresh: paused while the user is actively rearranging tiles in
+  // "Anpassen" mode (a refresh mid-drag wouldn't lose the layout itself --
+  // that's saved to localStorage on every move -- but it would replace
+  // whatever the user is looking at right as they're comparing tiles,
+  // which is a worse experience than just holding off for a few seconds).
+  useEffect(() => {
+    if (!autoRefresh || customizing) return;
+    const id = setInterval(() => loadAll(trafficWindow), AUTO_REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [autoRefresh, customizing, trafficWindow, loadAll]);
+
+  function toggleAutoRefresh() {
+    setAutoRefresh((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(AUTO_REFRESH_KEY, next ? "1" : "0");
+      } catch {
+        // localStorage unavailable -- the toggle just won't persist across reloads
+      }
+      return next;
+    });
+  }
 
   async function handleScanCache() {
     setScanning(true);
@@ -320,8 +367,25 @@ export function Dashboard() {
     title: t("dashboard.trafficTimeline"),
     node: (
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t("dashboard.trafficTimeline")}</CardTitle>
+          <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-0.5">
+            {TRAFFIC_WINDOWS.map((w) => (
+              <button
+                key={w}
+                type="button"
+                onClick={() => setTrafficWindow(w)}
+                className={cn(
+                  "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  trafficWindow === w
+                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+                )}
+              >
+                {t(`dashboard.trafficWindow.${w}` as const)}
+              </button>
+            ))}
+          </div>
         </CardHeader>
         <CardContent>
           <TrafficChart data={timeline} />
@@ -439,6 +503,15 @@ export function Dashboard() {
           <p className="text-sm text-[var(--muted)]">{t("dashboard.subtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant={autoRefresh ? "default" : "outline"}
+            size="sm"
+            onClick={toggleAutoRefresh}
+            title={autoRefresh ? t("dashboard.autoRefresh.onHint") : t("dashboard.autoRefresh.offHint")}
+          >
+            {autoRefresh ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            {autoRefresh ? t("dashboard.autoRefresh.on") : t("dashboard.autoRefresh.off")}
+          </Button>
           {customizing && (
             <Button variant="outline" size="sm" onClick={handleResetLayout}>
               {t("dashboard.customize.reset")}
