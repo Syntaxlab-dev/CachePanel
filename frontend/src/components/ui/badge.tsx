@@ -9,6 +9,7 @@ const badgeVariants = cva("inline-flex items-center rounded-full px-2 py-0.5 tex
       accent: "bg-[var(--accent-soft)] text-[var(--accent)]",
       ok: "bg-[var(--ok-soft)] text-[var(--ok)]",
       warn: "bg-[var(--warn-soft)] text-[var(--warn)]",
+      danger: "bg-[var(--danger-soft)] text-[var(--danger)]",
     },
   },
   defaultVariants: { variant: "neutral" },

@@ -77,6 +77,22 @@ export interface HealthStatus {
   containers: { name: string; status: string; uptime_seconds: number | null }[];
 }
 
+export interface DiagnosticCheck {
+  id: string;
+  status: "ok" | "warn" | "fail" | "unknown";
+  message: string;
+}
+
+export interface DiagnosticsResult {
+  checks: DiagnosticCheck[];
+}
+
+export interface CacheScanResult {
+  corrupt_file_count: number;
+  sample_paths: string[];
+  truncated: boolean;
+}
+
 export interface RunHistoryEntry {
   service: string;
   started_at: string;
@@ -157,6 +173,11 @@ export const api = {
   runHistory: () => request<{ runs: RunHistoryEntry[] }>("/api/prefill/history"),
 
   clearCache: () => request<{ message: string }>("/api/cache/clear", { method: "POST" }),
+
+  diagnostics: () => request<DiagnosticsResult>("/api/health/diagnostics"),
+
+  scanCache: () => request<CacheScanResult>("/api/cache/scan"),
+  cleanCorrupted: () => request<{ message: string }>("/api/cache/clean-corrupted", { method: "POST" }),
 
   exportSelection: () => request<ExportBundle>("/api/export"),
   importSelection: (bundle: ExportBundle) =>

@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowDownCircle,
   CheckCircle2,
   Gauge,
+  HelpCircle,
   History,
+  ScanSearch,
   Server,
   Trash2,
   Users,
@@ -16,7 +19,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrafficChart } from "@/components/TrafficChart";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
-import { api, type DashboardStats, type HealthStatus, type RunHistoryEntry } from "@/lib/api";
+import {
+  api,
+  type CacheScanResult,
+  type DashboardStats,
+  type DiagnosticCheck,
+  type HealthStatus,
+  type RunHistoryEntry,
+} from "@/lib/api";
 import { formatBytes, formatPercent, formatUptime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
@@ -34,6 +44,10 @@ export function Dashboard() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [history, setHistory] = useState<RunHistoryEntry[] | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [checks, setChecks] = useState<DiagnosticCheck[] | null>(null);
+  const [scan, setScan] = useState<CacheScanResult | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
 
   useEffect(() => {
     api
@@ -45,7 +59,36 @@ export function Dashboard() {
       .runHistory()
       .then((data) => setHistory(data.runs))
       .catch(() => setHistory(null));
+    api
+      .diagnostics()
+      .then((data) => setChecks(data.checks))
+      .catch(() => setChecks(null));
   }, []);
+
+  async function handleScanCache() {
+    setScanning(true);
+    try {
+      setScan(await api.scanCache());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Scan fehlgeschlagen");
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function handleCleanCorrupted() {
+    if (!window.confirm(t("dashboard.cacheIntegrity.cleanConfirm"))) return;
+    setCleaning(true);
+    try {
+      const result = await api.cleanCorrupted();
+      toast.success(result.message);
+      setScan(await api.scanCache());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Bereinigung fehlgeschlagen");
+    } finally {
+      setCleaning(false);
+    }
+  }
 
   async function handleClearCache() {
     const confirmed = window.confirm(
@@ -143,6 +186,68 @@ export function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      {checks && checks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ScanSearch className="h-4 w-4" /> {t("dashboard.diagnostics")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {checks.map((c) => (
+              <div key={c.id} className="flex items-start gap-2 text-sm">
+                <DiagnosticIcon status={c.status} />
+                <span className="text-[var(--muted)]">{c.message}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" /> {t("dashboard.cacheIntegrity")}
+          </CardTitle>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleScanCache} disabled={scanning}>
+              {scanning ? t("dashboard.cacheIntegrity.scanning") : t("dashboard.cacheIntegrity.scan")}
+            </Button>
+            {scan && scan.corrupt_file_count > 0 && (
+              <Button variant="outline" size="sm" onClick={handleCleanCorrupted} disabled={cleaning}>
+                <Trash2 className="h-3.5 w-3.5" />{" "}
+                {cleaning ? t("dashboard.cacheIntegrity.cleaning") : t("dashboard.cacheIntegrity.clean")}
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!scan ? (
+            <p className="text-sm text-[var(--muted)]">{t("dashboard.cacheIntegrity.notScanned")}</p>
+          ) : scan.corrupt_file_count === 0 ? (
+            <p className="flex items-center gap-2 text-sm text-[var(--ok)]">
+              <CheckCircle2 className="h-4 w-4" /> {t("dashboard.cacheIntegrity.ok")}
+            </p>
+          ) : (
+            <div className="flex flex-col gap-1 text-sm">
+              <p className="flex items-center gap-2 text-[var(--warn)]">
+                <AlertTriangle className="h-4 w-4" /> {scan.corrupt_file_count}{" "}
+                {t("dashboard.cacheIntegrity.found")}
+              </p>
+              {scan.sample_paths.length > 0 && (
+                <ul className="ml-6 list-disc text-xs text-[var(--muted)]">
+                  {scan.sample_paths.map((p) => (
+                    <li key={p} className="truncate">
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {history && history.length > 0 && (
         <Card>
@@ -285,4 +390,17 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
       </CardContent>
     </Card>
   );
+}
+
+function DiagnosticIcon({ status }: { status: DiagnosticCheck["status"] }) {
+  switch (status) {
+    case "ok":
+      return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ok)]" />;
+    case "warn":
+      return <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warn)]" />;
+    case "fail":
+      return <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger)]" />;
+    default:
+      return <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted)]" />;
+  }
 }

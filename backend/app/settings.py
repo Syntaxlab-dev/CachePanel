@@ -12,6 +12,14 @@ class Settings:
 
     lancache_log_dir: Path = Path(os.environ.get("LANCACHE_LOG_DIR", "/mnt/lancache/logs"))
 
+    # LAN IP of the machine serving both lancache-dns (port 53) and lancache
+    # (port 80) -- in this project's own docker-compose layout that's always
+    # the same host CachePanel itself runs on, but it's not auto-detectable
+    # in general, so it's opt-in config rather than a guessed default. Used
+    # by the DNS/heartbeat diagnostics in services/health.py. Blank = those
+    # checks report "not configured" instead of guessing wrong.
+    lancache_ip: str = os.environ.get("LANCACHE_IP", "")
+
     docker_socket: str = os.environ.get("DOCKER_SOCKET", "unix://var/run/docker.sock")
 
     steam_prefill_container: str = os.environ.get("STEAM_PREFILL_CONTAINER", "steam-prefill")
