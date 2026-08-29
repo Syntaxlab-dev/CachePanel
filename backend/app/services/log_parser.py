@@ -112,7 +112,13 @@ def _tail_lines(path: Path, max_lines: int) -> list[str]:
         file_size = f.tell()
         block = -1
         remaining = b""
-        while len(lines) <= max_lines and file_size + block * chunk_size > 0:
+        # Only len(lines) and the seek_pos==0 break below decide when to
+        # stop -- an earlier version also gated the loop on
+        # `file_size + block * chunk_size > 0`, which is the pre-clamp
+        # value of seek_pos. For any file smaller than one chunk that's
+        # negative on the very first iteration, so the loop never ran and
+        # _tail_lines() silently returned [] regardless of content.
+        while len(lines) <= max_lines:
             seek_pos = max(0, file_size + block * chunk_size)
             f.seek(seek_pos)
             data = f.read(min(chunk_size, file_size - seek_pos)) + remaining
