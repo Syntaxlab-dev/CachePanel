@@ -97,6 +97,35 @@ below and re-crossing). A "Send test" button lets you verify the URL
 immediately. A webhook failure or timeout only logs a warning — it never
 breaks a prefill run.
 
+## Optional: PostgreSQL storage
+
+By default CachePanel stores everything (settings, run history, schedule,
+panel login) as JSON files under `./data` — zero config, works out of the
+box. If you'd rather run a real database (e.g. you already run Postgres
+for other services, or you're not comfortable with plain files holding an
+encrypted settings blob), set `DATABASE_URL` in `.env` and start the
+bundled optional Postgres service:
+
+```bash
+# .env
+DATABASE_URL=postgresql://cachepanel:changeme@postgres:5432/cachepanel
+
+docker compose --profile postgres up -d
+```
+
+Every store (settings, run history, schedule, panel login) switches to
+Postgres automatically once `DATABASE_URL` is set — same encrypted-at-rest
+settings blob as before (see [Security notes](#security-notes)), just kept
+in a table instead of a file. The schema is created automatically on
+startup if it doesn't exist yet.
+
+**No automatic migration**: switching from file storage to Postgres (or
+back) starts with empty tables/files — you'll re-enter your Settings-page
+values and go through the panel's first-run login setup again. There's no
+data-loss risk in the sense that your old `./data` files stay exactly
+where they are, untouched; you just won't see their contents from the
+newly-active storage backend until you re-enter them.
+
 ## Deploying on Unraid / TrueNAS SCALE
 
 - **Unraid**: [`unraid/cachepanel.xml`](unraid/cachepanel.xml) is a

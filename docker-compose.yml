@@ -16,3 +16,21 @@ services:
       - /opt/stacks/epic-prefill/config:/opt/stacks/epic-prefill/config
       - /mnt/lancache/logs:/mnt/lancache/logs:ro
       - ./data:/data
+
+  # Optional, only started with `docker compose --profile postgres up -d`.
+  # Only useful together with a matching DATABASE_URL in .env (pointing at
+  # this service's hostname, "postgres") -- see the README's "Optional:
+  # PostgreSQL" section. Without --profile postgres, `docker compose up -d`
+  # behaves exactly as before this: just the cachepanel container, JSON
+  # files under ./data.
+  postgres:
+    image: postgres:16-alpine
+    container_name: cachepanel-postgres
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cachepanel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: cachepanel
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data

@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from threading import Lock
 
-from app.services import settings_encryption
+from app.services import db, settings_encryption
 
 _STORE_PATH = Path(os.environ.get("APP_SETTINGS_PATH", "/data/settings.json"))
 _lock = Lock()
@@ -30,7 +30,7 @@ _DEFAULTS = {
 }
 
 
-def _read_raw() -> dict:
+def _read_raw_file() -> dict:
     if not _STORE_PATH.exists():
         return dict(_DEFAULTS)
 
@@ -64,6 +64,28 @@ def _read_raw() -> dict:
     return dict(_DEFAULTS)
 
 
+def _read_raw_db() -> dict:
+    with db.get_connection() as conn:
+        row = conn.execute("SELECT encrypted_blob FROM app_settings WHERE id = 1").fetchone()
+
+    if row is None:
+        return dict(_DEFAULTS)
+
+    # Same Fernet layer, same failure handling as the file path above --
+    # only the byte source changed.
+    try:
+        data = json.loads(settings_encryption.decrypt(bytes(row[0])))
+        merged = dict(_DEFAULTS)
+        merged.update({k: v for k, v in data.items() if k in _DEFAULTS})
+        return merged
+    except (settings_encryption.InvalidToken, json.JSONDecodeError, UnicodeDecodeError):
+        return dict(_DEFAULTS)
+
+
+def _read_raw() -> dict:
+    return _read_raw_db() if db.is_enabled() else _read_raw_file()
+
+
 def get_settings() -> dict:
     with _lock:
         return _read_raw()
@@ -74,9 +96,20 @@ def update_settings(partial: dict) -> dict:
         current = _read_raw()
         current.update({k: v for k, v in partial.items() if k in _DEFAULTS})
 
-        _STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        # Same Fernet-encrypted blob either way -- only where it's stored
+        # (file vs. a BYTEA column) differs below.
         encrypted = settings_encryption.encrypt(json.dumps(current).encode("utf-8"))
 
+        if db.is_enabled():
+            with db.get_connection() as conn:
+                conn.execute(
+                    "INSERT INTO app_settings (id, encrypted_blob) VALUES (1, %s) "
+                    "ON CONFLICT (id) DO UPDATE SET encrypted_blob = EXCLUDED.encrypted_blob",
+                    (encrypted,),
+                )
+            return current
+
+        _STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(dir=_STORE_PATH.parent, prefix=".settings-", suffix=".json")
         try:
             with os.fdopen(fd, "wb") as f:

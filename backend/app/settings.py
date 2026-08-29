@@ -22,6 +22,11 @@ class Settings:
 
     docker_socket: str = os.environ.get("DOCKER_SOCKET", "unix://var/run/docker.sock")
 
+    # Optional: use PostgreSQL instead of JSON files under /data for
+    # settings/run history/schedule/panel login (see services/db.py).
+    # Blank (default) = unchanged JSON-file behavior, zero config needed.
+    database_url: str = os.environ.get("DATABASE_URL", "")
+
     steam_prefill_container: str = os.environ.get("STEAM_PREFILL_CONTAINER", "steam-prefill")
     battlenet_prefill_container: str = os.environ.get("BATTLENET_PREFILL_CONTAINER", "battlenet-prefill")
     epic_prefill_container: str = os.environ.get("EPIC_PREFILL_CONTAINER", "epic-prefill")

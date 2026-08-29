@@ -22,11 +22,12 @@ from app.routers import (
     steam,
     steam_size,
 )
-from app.services import scheduler_service, session_secret
+from app.services import db, scheduler_service, session_secret
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    db.init_schema()  # no-op unless DATABASE_URL is set
     scheduler_service.start_and_reload()
     yield
     scheduler_service.shutdown()
