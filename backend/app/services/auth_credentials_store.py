@@ -34,13 +34,44 @@ def is_configured() -> bool:
         return _STORE_PATH.exists()
 
 
+def get_credentials() -> dict | None:
+    """Returns {"username", "password_hash"} or None if nothing's set up
+    yet. Used by the full-backup feature -- the bcrypt hash is safe to
+    include in a backup file as-is (see module docstring: it's already
+    the protection, not the storage medium), so this is a plain read, no
+    extra encryption layer to add here."""
+    with _lock:
+        if db.is_enabled():
+            with db.get_connection() as conn:
+                row = conn.execute("SELECT username, password_hash FROM auth WHERE id = 1").fetchone()
+            return {"username": row[0], "password_hash": row[1]} if row else None
+        if not _STORE_PATH.exists():
+            return None
+        try:
+            data = json.loads(_STORE_PATH.read_text(encoding="utf-8"))
+            return {"username": data["username"], "password_hash": data["password_hash"]}
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError, KeyError):
+            return None
+
+
 def set_credentials(username: str, password: str) -> None:
     """Sets the panel credentials. Callers must ensure this is only ever
     invoked when no credentials exist yet (first-run setup) or when the
     caller has already authenticated (changing credentials later) -- this
     function itself doesn't check, it just writes."""
     password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    _write_credentials(username, password_hash)
 
+
+def restore_credentials(username: str, password_hash: str) -> None:
+    """Same as set_credentials(), but takes an ALREADY-hashed password --
+    used by the full-backup restore, which stores/carries the bcrypt hash
+    itself (see get_credentials()), never the plaintext password. Doesn't
+    re-hash it (that would hash the hash, breaking every future login)."""
+    _write_credentials(username, password_hash)
+
+
+def _write_credentials(username: str, password_hash: str) -> None:
     with _lock:
         if db.is_enabled():
             with db.get_connection() as conn:

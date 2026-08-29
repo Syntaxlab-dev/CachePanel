@@ -86,6 +86,27 @@ def add_entry(service: str, started_at: str, exit_code: int, duration_seconds: f
     return entry
 
 
+def replace_all(entries: list[dict]) -> None:
+    """Wholesale-replaces the run history -- used by the full-backup
+    restore. Applies the same limit as add_entry() rather than trusting
+    the incoming list's length (a backup taken when the limit was higher
+    shouldn't bypass today's configured cap)."""
+    limit = _max_entries()
+    trimmed = entries[:limit]
+    with _lock:
+        if db.is_enabled():
+            with db.get_connection() as conn:
+                conn.execute("DELETE FROM run_history")
+                for e in trimmed:
+                    conn.execute(
+                        "INSERT INTO run_history (service, started_at, exit_code, duration_seconds) "
+                        "VALUES (%s, %s, %s, %s)",
+                        (e["service"], e["started_at"], e["exit_code"], e["duration_seconds"]),
+                    )
+        else:
+            _write_all_file(trimmed)
+
+
 def get_history() -> list[dict]:
     limit = _max_entries()
     with _lock:

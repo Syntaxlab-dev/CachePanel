@@ -10,6 +10,7 @@ from app.auth_guard import AuthGuardMiddleware
 from app.security_headers import SecurityHeadersMiddleware
 from app.routers import (
     auth,
+    backup,
     battlenet,
     cache,
     dashboard,
@@ -74,6 +75,7 @@ app.include_router(cache.router)
 app.include_router(export_import.router)
 app.include_router(schedule.router)
 app.include_router(metrics.router)
+app.include_router(backup.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 

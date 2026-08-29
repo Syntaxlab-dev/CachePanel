@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.services import app_settings_store, discord_notifier
+from app.services import app_settings_store, discord_notifier, update_check
 from app.settings import settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -57,3 +57,14 @@ def get_version():
         "git_sha_short": settings.git_sha[:7] if settings.git_sha else "",
         "repo_url": "https://github.com/Syntaxlab-dev/CachePanel",
     }
+
+
+@router.get(
+    "/update-check",
+    summary="Check for a newer published image",
+    description="One-shot comparison of the running build's Git SHA against the `latest` GHCR tag's revision "
+    "label. Never raises -- `checked: false` means the check itself couldn't complete (network, local build "
+    "with no baked-in SHA, unexpected registry response), not that no update was found.",
+)
+def get_update_check():
+    return update_check.check_for_update(settings.git_sha)

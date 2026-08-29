@@ -216,6 +216,23 @@ const dictionaries = {
     "settings.runHistoryLimitLabel": "Anzahl gespeicherter Download-Läufe",
     "settings.runHistoryLimitHint": "Wie viele Einträge im Download-Verlauf behalten werden (10–500). Ein niedrigerer Wert wirkt erst nach und nach bei künftigen Läufen, nicht rückwirkend.",
 
+    "settings.backup": "Sicherung",
+    "settings.backupHint": "Sichert Einstellungen, Zeitplan, Download-Verlauf und den Panel-Login als eine Datei (nicht die Steam/Battle.net/Epic-Auswahl — die hat ihr eigenes Export weiter oben). Einstellungen bleiben verschlüsselt und lassen sich nur auf diesem Server wiederherstellen — bei einem Serverwechsel musst du Steam-Key & Co. neu eintragen. Trotzdem wie eine sensible Datei behandeln.",
+    "settings.backupDownload": "Sicherung herunterladen",
+    "settings.backupRestore": "Sicherung wiederherstellen",
+    "settings.backupRestoring": "Wird wiederhergestellt…",
+    "settings.backupDownloadedNotice": "Sicherung heruntergeladen.",
+    "settings.backupRestoredNotice": "Sicherung wiederhergestellt.",
+    "settings.backupRestoreFailed": "Wiederherstellung fehlgeschlagen.",
+    "settings.updateAvailablePrefix": "Neue Version verfügbar:",
+
+    "shortcuts.helpTitle": "Tastenkürzel",
+    "shortcuts.goDashboard": "Zum Dashboard",
+    "shortcuts.goSettings": "Zu den Einstellungen",
+    "shortcuts.focusSearch": "Suche fokussieren",
+    "shortcuts.openHelp": "Diese Übersicht öffnen",
+    "shortcuts.close": "Schließen",
+
     "schedule.legacyWarning":
       "Der alte feste Zeitplan (02:00/23:00 Uhr) in den einzelnen Prefill-Containern läuft aktuell parallel weiter, bis er manuell deaktiviert wird.",
     "schedule.saved": "Zeitplan gespeichert.",
@@ -443,6 +460,23 @@ const dictionaries = {
     "settings.discordNotifyDiskWarning": "Notify on cache disk warning (90%+ full)",
     "settings.runHistoryLimitLabel": "Download run history size",
     "settings.runHistoryLimitHint": "How many entries to keep in the run history (10-500). A lower value only takes effect gradually on future runs, not retroactively.",
+
+    "settings.backup": "Backup",
+    "settings.backupHint": "Bundles settings, schedule, run history, and the panel login into one file (not the Steam/Battle.net/Epic selection -- that has its own export above). Settings stay encrypted and only restore on this same server -- moving to a new host means re-entering your Steam key etc. Still treat the file as sensitive.",
+    "settings.backupDownload": "Download backup",
+    "settings.backupRestore": "Restore backup",
+    "settings.backupRestoring": "Restoring…",
+    "settings.backupDownloadedNotice": "Backup downloaded.",
+    "settings.backupRestoredNotice": "Backup restored.",
+    "settings.backupRestoreFailed": "Restore failed.",
+    "settings.updateAvailablePrefix": "New version available:",
+
+    "shortcuts.helpTitle": "Keyboard shortcuts",
+    "shortcuts.goDashboard": "Go to dashboard",
+    "shortcuts.goSettings": "Go to settings",
+    "shortcuts.focusSearch": "Focus search",
+    "shortcuts.openHelp": "Open this overview",
+    "shortcuts.close": "Close",
 
     "schedule.legacyWarning":
       "The old fixed schedule (02:00/23:00) inside the individual prefill containers is still running in parallel until it's manually disabled.",

@@ -115,6 +115,7 @@ export function BattleNet() {
               className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              data-shortcut-search
             />
           </div>
           <Button variant="outline" size="sm" onClick={selectAll}>

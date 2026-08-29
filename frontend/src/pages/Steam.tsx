@@ -150,6 +150,7 @@ export function Steam() {
             className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            data-shortcut-search
           />
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-0.5">

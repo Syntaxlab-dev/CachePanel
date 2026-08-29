@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Bell, CheckCircle2, Download, Image, Info, KeyRound, LogIn, Palette, Send, Upload } from "lucide-react";
+import { AlertCircle, Archive, Bell, CheckCircle2, Download, Image, Info, KeyRound, LogIn, Palette, Send, Sparkles, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScheduleCard } from "@/components/ScheduleCard";
-import { api, type AppSettings, type ExportBundle, type VersionInfo } from "@/lib/api";
+import { api, type AppSettings, type BackupBundle, type ExportBundle, type UpdateCheckResult, type VersionInfo } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { ACCENTS, getStoredAccent, setAccent, type Accent } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,10 @@ export function Settings() {
   const [importing, setImporting] = useState(false);
   const [testingWebhook, setTestingWebhook] = useState(false);
   const [version, setVersion] = useState<VersionInfo | null>(null);
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
+  const [restoringBackup, setRestoringBackup] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const backupFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     api
@@ -29,6 +32,10 @@ export function Settings() {
       .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
 
     api.getVersion().then(setVersion).catch(() => setVersion(null));
+    // Single one-shot check, not a poller -- see update_check.py's docstring
+    // for why (never surface a network hiccup to the user, no background
+    // work). Silently stays null on any failure.
+    api.checkForUpdate().then(setUpdateCheck).catch(() => setUpdateCheck(null));
 
     const params = new URLSearchParams(window.location.search);
     const loginResult = params.get("steam_login");
@@ -110,6 +117,52 @@ export function Settings() {
       );
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleBackupDownload() {
+    try {
+      const bundle = await api.getBackup();
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cachepanel-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(t("settings.backupDownloadedNotice"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.backupRestoreFailed"));
+    }
+  }
+
+  function handleBackupRestoreClick() {
+    backupFileInputRef.current?.click();
+  }
+
+  async function handleBackupRestoreFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setRestoringBackup(true);
+    try {
+      const text = await file.text();
+      const bundle = JSON.parse(text) as BackupBundle;
+      await api.restoreBackup(bundle);
+      toast.success(t("settings.backupRestoredNotice"));
+      // Settings/schedule/history all changed server-side -- a reload is
+      // simpler and more reliable than re-fetching every piece of state
+      // this page (and others, e.g. the dashboard's history) hold locally.
+      window.location.reload();
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `${t("settings.backupRestoreFailed")} ${err.message}`
+          : t("settings.backupRestoreFailed"),
+      );
+    } finally {
+      setRestoringBackup(false);
     }
   }
 
@@ -398,10 +451,42 @@ export function Settings() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            <Archive className="h-4 w-4" /> {t("settings.backup")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-xs text-[var(--muted)]">{t("settings.backupHint")}</p>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={handleBackupDownload}>
+              <Download className="h-4 w-4" /> {t("settings.backupDownload")}
+            </Button>
+            <Button type="button" variant="outline" onClick={handleBackupRestoreClick} disabled={restoringBackup}>
+              <Upload className="h-4 w-4" /> {restoringBackup ? t("settings.backupRestoring") : t("settings.backupRestore")}
+            </Button>
+            <input
+              ref={backupFileInputRef}
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={handleBackupRestoreFile}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <Info className="h-4 w-4" /> {t("settings.about")}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-1 text-sm text-[var(--muted)]">
+          {updateCheck?.checked && updateCheck.update_available && (
+            <div className="mb-2 flex items-center gap-2 rounded-lg border border-[var(--accent)] bg-[var(--accent-soft)] p-3 text-sm text-[var(--accent)]">
+              <Sparkles className="h-4 w-4 shrink-0" />
+              {t("settings.updateAvailablePrefix")} {updateCheck.latest_sha}
+            </div>
+          )}
           <p>
             {t("settings.aboutVersionPrefix")}:{" "}
             {version?.git_sha_short ? (

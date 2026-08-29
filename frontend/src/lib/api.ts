@@ -123,6 +123,28 @@ export interface ExportBundle {
   epic_app_ids: string[];
 }
 
+export interface BackupBundle {
+  schema_version: number;
+  // Base64-encoded, still Fernet-encrypted on the backend -- the frontend
+  // never sees plaintext secrets here, just passes this through as an
+  // opaque blob on download/upload. Only decrypts successfully if restored
+  // on the same host it was backed up from.
+  settings_encrypted: string;
+  schedule: ScheduleConfigLike;
+  run_history: RunHistoryEntry[];
+  auth: { username: string; password_hash: string } | null;
+}
+
+// ScheduleConfig itself is defined further down, after this type is used --
+// a small structural duplicate here avoids reordering the whole file.
+type ScheduleConfigLike = Record<string, { enabled: boolean; hour: number; minute: number }>;
+
+export interface UpdateCheckResult {
+  checked: boolean;
+  update_available: boolean;
+  latest_sha: string | null;
+}
+
 export interface AuthStatus {
   setup_required: boolean;
   authenticated: boolean;
@@ -190,6 +212,11 @@ export const api = {
       body: JSON.stringify({ webhook_url: webhookUrl }),
     }),
   getVersion: () => request<VersionInfo>("/api/settings/version"),
+  checkForUpdate: () => request<UpdateCheckResult>("/api/settings/update-check"),
+
+  getBackup: () => request<BackupBundle>("/api/backup"),
+  restoreBackup: (bundle: BackupBundle) =>
+    request<{ ok: boolean }>("/api/backup/restore", { method: "POST", body: JSON.stringify(bundle) }),
 
   health: () => request<HealthStatus>("/api/health"),
 

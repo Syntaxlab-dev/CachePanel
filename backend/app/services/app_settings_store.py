@@ -92,6 +92,54 @@ def get_settings() -> dict:
         return _read_raw()
 
 
+def get_encrypted_blob() -> bytes:
+    """Raw Fernet-encrypted bytes exactly as stored, for the full-backup
+    feature (routers/backup.py). Deliberately does NOT go through
+    get_settings()'s decrypt step -- settings_encryption.py's own docstring
+    names "it ends up in a misconfigured backup" as precisely the leak
+    scenario the encryption defends against, so a backup feature handing
+    back plaintext secrets would quietly defeat that. This only matters
+    together with this host's .encryption_key, which a backup deliberately
+    does not include -- restoring it elsewhere fails closed (falls back to
+    defaults via the existing InvalidToken handling in _read_raw_file()/
+    _read_raw_db()), it doesn't raise or leak anything."""
+    with _lock:
+        if db.is_enabled():
+            with db.get_connection() as conn:
+                row = conn.execute("SELECT encrypted_blob FROM app_settings WHERE id = 1").fetchone()
+            if row is not None:
+                return bytes(row[0])
+        elif _STORE_PATH.exists():
+            return _STORE_PATH.read_bytes()
+    return settings_encryption.encrypt(json.dumps(dict(_DEFAULTS)).encode("utf-8"))
+
+
+def restore_encrypted_blob(blob: bytes) -> None:
+    """Writes a raw Fernet-encrypted blob directly (full-backup restore),
+    bypassing update_settings()'s read-merge-encrypt cycle entirely -- the
+    whole point is to never decrypt/re-encrypt the secrets it contains."""
+    with _lock:
+        if db.is_enabled():
+            with db.get_connection() as conn:
+                conn.execute(
+                    "INSERT INTO app_settings (id, encrypted_blob) VALUES (1, %s) "
+                    "ON CONFLICT (id) DO UPDATE SET encrypted_blob = EXCLUDED.encrypted_blob",
+                    (blob,),
+                )
+            return
+
+        _STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=_STORE_PATH.parent, prefix=".settings-", suffix=".json")
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(blob)
+            os.chmod(tmp_path, 0o600)
+            os.replace(tmp_path, _STORE_PATH)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+
 def update_settings(partial: dict) -> dict:
     with _lock:
         current = _read_raw()

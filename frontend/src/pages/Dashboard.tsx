@@ -38,6 +38,7 @@ import {
 import { formatBytes, formatPercent, formatUptime, cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { getStoredLayout, saveLayout, resetLayout, type DashboardLayout, type WidgetId } from "@/lib/dashboardLayout";
+import { setDiagnosticsBadge, clearDiagnosticsBadge } from "@/lib/diagnosticsBadge";
 
 const AUTO_REFRESH_KEY = "cachepanel-dashboard-autorefresh";
 const AUTO_REFRESH_INTERVAL_MS = 30_000;
@@ -107,6 +108,19 @@ export function Dashboard() {
     const id = setInterval(() => loadAll(trafficWindow), AUTO_REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
   }, [autoRefresh, customizing, trafficWindow, loadAll]);
+
+  // Tab title + favicon dot reflect diagnostics status while this page is
+  // mounted -- cleared on unmount so navigating away doesn't leave a stale
+  // warning badge showing if the underlying problem gets fixed later.
+  useEffect(() => {
+    const hasProblem = !!checks?.some((c) => c.status === "fail" || c.status === "warn");
+    if (hasProblem) {
+      setDiagnosticsBadge();
+    } else {
+      clearDiagnosticsBadge();
+    }
+    return () => clearDiagnosticsBadge();
+  }, [checks]);
 
   function toggleAutoRefresh() {
     setAutoRefresh((prev) => {
