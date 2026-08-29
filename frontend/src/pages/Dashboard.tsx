@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   Gauge,
+  HardDrive,
   HelpCircle,
   History,
   Pause,
@@ -30,6 +31,7 @@ import { TrafficChart } from "@/components/TrafficChart";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 import {
   api,
+  type CacheForecast,
   type CacheScanResult,
   type DashboardStats,
   type DiagnosticCheck,
@@ -37,7 +39,7 @@ import {
   type RunHistoryEntry,
   type TrafficWindow,
 } from "@/lib/api";
-import { formatBytes, formatPercent, formatUptime, cn } from "@/lib/utils";
+import { formatBytes, formatDaysApprox, formatPercent, formatUptime, cn } from "@/lib/utils";
 import { downloadCsv } from "@/lib/csv";
 import { useI18n } from "@/lib/i18n";
 import { getStoredLayout, saveLayout, resetLayout, type DashboardLayout, type WidgetId } from "@/lib/dashboardLayout";
@@ -71,6 +73,7 @@ export function Dashboard() {
   const [clearing, setClearing] = useState(false);
   const [checks, setChecks] = useState<DiagnosticCheck[] | null>(null);
   const [scan, setScan] = useState<CacheScanResult | null>(null);
+  const [forecast, setForecast] = useState<CacheForecast | null>(null);
   const [scanning, setScanning] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [layout, setLayout] = useState<DashboardLayout>(() => getStoredLayout());
@@ -94,6 +97,7 @@ export function Dashboard() {
         .diagnostics()
         .then((data) => setChecks(data.checks))
         .catch(() => setChecks(null));
+      api.cacheForecast().then(setForecast).catch(() => setForecast(null));
     },
     [t],
   );
@@ -380,6 +384,51 @@ export function Dashboard() {
       </Card>
     ),
   };
+
+  if (forecast) {
+    const approx =
+      forecast.available && forecast.hours_until_full != null
+        ? formatDaysApprox(forecast.hours_until_full)
+        : null;
+    widgetDefs.cacheForecast = {
+      title: t("dashboard.cacheForecast"),
+      node: (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HardDrive className="h-4 w-4" /> {t("dashboard.cacheForecast")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!approx ? (
+              <p className="text-sm text-[var(--muted)]">
+                {forecast.reason === "not_growing"
+                  ? t("dashboard.cacheForecast.notGrowing")
+                  : forecast.reason === "disk_usage_unavailable"
+                    ? t("dashboard.cacheForecast.diskUnavailable")
+                    : t("dashboard.cacheForecast.notEnoughData")}
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2 text-sm">
+                <p>
+                  {t("dashboard.cacheForecast.fullIn")}{" "}
+                  <span className="font-semibold">
+                    {approx.value} {t(`dashboard.cacheForecast.unit.${approx.unit}` as const)}
+                  </span>
+                </p>
+                <p className="text-[var(--muted)]">
+                  {formatBytes(forecast.growth_bytes_per_day ?? 0)}
+                  {t("dashboard.cacheForecast.perDay")}
+                  {" · "}
+                  {forecast.percent_used?.toFixed(0)}% {t("dashboard.cacheForecast.diskUsed")}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ),
+    };
+  }
 
   if (history && history.length > 0) {
     widgetDefs.runHistory = {

@@ -53,3 +53,39 @@ def send_test_message(webhook_url: str) -> bool:
     URL directly rather than reading it from stored settings, so the user
     can verify it before saving."""
     return _post(webhook_url, ":bell: This is a test notification from CachePanel.")
+
+
+def _format_bytes(n: float) -> str:
+    value = float(n)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} TB"  # unreachable, satisfies type checkers
+
+
+def notify_cache_report(
+    webhook_url: str,
+    total_requests: int,
+    hit_ratio: float,
+    bandwidth_saved_bytes: int,
+    percent_used: float | None,
+    hours_until_full: float | None,
+) -> bool:
+    """Weekly cache summary -- see cache_report.py (which builds these
+    numbers the same way for both the scheduled job and the "send now"
+    test button) and scheduler_service.py's report job."""
+    lines = [
+        ":bar_chart: **Weekly CachePanel report**",
+        f"{total_requests:,} requests, {hit_ratio * 100:.0f}% served from cache.",
+        f"Bandwidth saved: **{_format_bytes(bandwidth_saved_bytes)}**.",
+    ]
+    if percent_used is not None:
+        lines.append(f"Cache disk: **{percent_used:.0f}%** full.")
+    if hours_until_full is not None:
+        days = hours_until_full / 24
+        if days < 1:
+            lines.append(":warning: At the current rate, the cache disk will be full in under a day.")
+        else:
+            lines.append(f"At the current rate, full in about **{days:.0f} day(s)**.")
+    return _post(webhook_url, "\n".join(lines))

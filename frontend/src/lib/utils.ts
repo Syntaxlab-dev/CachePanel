@@ -25,3 +25,15 @@ export function formatUptime(seconds: number): string {
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
+
+// Rounds an "hours until X" forecast down to a coarser, more honest unit --
+// a forecast built from a short log sample (see cache_forecast.py) has
+// real uncertainty, so "in 743 hours" is false precision; "in about 31
+// days" (or "in about 2 years" for a very slow-growing cache, rather than
+// literally rendering a 5-digit day count) reads as the estimate it is.
+export function formatDaysApprox(hours: number): { value: number; unit: "hours" | "days" | "years" } {
+  const days = hours / 24;
+  if (days < 1) return { value: Math.max(1, Math.round(hours)), unit: "hours" };
+  if (days > 365) return { value: Math.max(1, Math.round(days / 365)), unit: "years" };
+  return { value: Math.round(days), unit: "days" };
+}

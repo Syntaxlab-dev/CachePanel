@@ -74,6 +74,20 @@ export interface AppSettings {
   discord_notify_failure: boolean;
   discord_notify_disk_warning: boolean;
   run_history_limit: number;
+  report_enabled: boolean;
+  report_weekday: number;
+  report_hour: number;
+  report_minute: number;
+}
+
+export interface CacheForecast {
+  available: boolean;
+  reason: "not_enough_data" | "not_growing" | "disk_usage_unavailable" | null;
+  total_bytes: number | null;
+  used_bytes: number | null;
+  percent_used: number | null;
+  growth_bytes_per_day: number | null;
+  hours_until_full: number | null;
 }
 
 export type TrafficWindow = "24h" | "7d" | "30d";
@@ -218,6 +232,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ webhook_url: webhookUrl }),
     }),
+  sendCacheReport: (webhookUrl: string) =>
+    request<{ message: string }>("/api/settings/notifications/test-report", {
+      method: "POST",
+      body: JSON.stringify({ webhook_url: webhookUrl }),
+    }),
   getVersion: () => request<VersionInfo>("/api/settings/version"),
   checkForUpdate: () => request<UpdateCheckResult>("/api/settings/update-check"),
 
@@ -232,6 +251,7 @@ export const api = {
   clearCache: () => request<{ message: string }>("/api/cache/clear", { method: "POST" }),
 
   diagnostics: () => request<DiagnosticsResult>("/api/health/diagnostics"),
+  cacheForecast: () => request<CacheForecast>("/api/health/forecast"),
 
   scanCache: () => request<CacheScanResult>("/api/cache/scan"),
   cleanCorrupted: () => request<{ message: string }>("/api/cache/clean-corrupted", { method: "POST" }),

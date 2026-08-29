@@ -16,7 +16,7 @@ import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.services import app_settings_store, cache_manager, discord_notifier, schedule_store
+from app.services import app_settings_store, cache_manager, cache_report, discord_notifier, schedule_store
 from app.services.cache_manager import CacheManagerError
 from app.services.prefill_runner import PrefillRunnerError, trigger_prefill
 
@@ -27,6 +27,8 @@ _scheduler = BackgroundScheduler()
 _DISK_WARNING_JOB_ID = "disk-warning-check"
 _DISK_WARNING_THRESHOLD_PERCENT = 90
 _DISK_WARNING_INTERVAL_MINUTES = 30
+
+_REPORT_JOB_ID = "cache-report"
 
 # Tracks whether a disk-warning notification has already fired for the
 # *current* above-threshold spell, so a still-full disk doesn't re-notify
@@ -63,6 +65,46 @@ def _check_disk_warning() -> None:
         _disk_warning_active = False
 
 
+def _send_cache_report() -> None:
+    cfg = app_settings_store.get_settings()
+    webhook_url = cfg.get("discord_webhook_url") or ""
+    if not webhook_url or not cfg.get("report_enabled"):
+        return
+
+    summary = cache_report.build_report()
+    discord_notifier.notify_cache_report(
+        webhook_url,
+        total_requests=summary["total_requests"],
+        hit_ratio=summary["hit_ratio"],
+        bandwidth_saved_bytes=summary["bandwidth_saved_bytes"],
+        percent_used=summary["percent_used"],
+        hours_until_full=summary["hours_until_full"],
+    )
+
+
+def reload_report_job() -> None:
+    """Removes and re-adds the weekly report job with the current settings'
+    weekday/hour/minute -- same remove-then-add pattern as reload_jobs()
+    below, called after every settings save (routers/settings.py) so a
+    changed schedule takes effect immediately rather than needing a
+    restart."""
+    cfg = app_settings_store.get_settings()
+    existing = _scheduler.get_job(_REPORT_JOB_ID)
+    if existing:
+        existing.remove()
+    if cfg.get("report_enabled"):
+        _scheduler.add_job(
+            _send_cache_report,
+            trigger=CronTrigger(
+                day_of_week=cfg.get("report_weekday", 0),
+                hour=cfg.get("report_hour", 9),
+                minute=cfg.get("report_minute", 0),
+            ),
+            id=_REPORT_JOB_ID,
+            replace_existing=True,
+        )
+
+
 def reload_jobs() -> None:
     config = schedule_store.get_schedule()
     for service, entry in config.items():
@@ -84,6 +126,7 @@ def start_and_reload() -> None:
     if not _scheduler.running:
         _scheduler.start()
     reload_jobs()
+    reload_report_job()
     _scheduler.add_job(
         _check_disk_warning,
         trigger="interval",

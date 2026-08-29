@@ -19,6 +19,7 @@ export function Settings() {
   const [loginNotice, setLoginNotice] = useState<"success" | "failed" | null>(null);
   const [importing, setImporting] = useState(false);
   const [testingWebhook, setTestingWebhook] = useState(false);
+  const [sendingReport, setSendingReport] = useState(false);
   const [version, setVersion] = useState<VersionInfo | null>(null);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [restoringBackup, setRestoringBackup] = useState(false);
@@ -134,6 +135,19 @@ export function Settings() {
       toast.error(err instanceof Error ? err.message : t("settings.discordTestFailed"));
     } finally {
       setTestingWebhook(false);
+    }
+  }
+
+  async function handleSendReportNow() {
+    if (!values?.discord_webhook_url) return;
+    setSendingReport(true);
+    try {
+      await api.sendCacheReport(values.discord_webhook_url);
+      toast.success(t("settings.reportSentNotice"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.reportSendFailed"));
+    } finally {
+      setSendingReport(false);
     }
   }
 
@@ -492,6 +506,56 @@ export function Settings() {
                   />
                   {t("settings.discordNotifyDiskWarning")}
                 </label>
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={values.report_enabled}
+                    onChange={(e) => setValues({ ...values, report_enabled: e.target.checked })}
+                  />
+                  {t("settings.reportEnabled")}
+                </label>
+                <p className="text-xs text-[var(--muted)]">{t("settings.reportHint")}</p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <select
+                    aria-label={t("settings.reportWeekday")}
+                    value={values.report_weekday}
+                    disabled={!values.report_enabled}
+                    onChange={(e) => setValues({ ...values, report_weekday: Number(e.target.value) })}
+                    className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] disabled:opacity-40"
+                  >
+                    {([0, 1, 2, 3, 4, 5, 6] as const).map((d) => (
+                      <option key={d} value={d}>
+                        {t(`settings.weekday.${d}` as const)}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="time"
+                    aria-label={t("settings.reportTime")}
+                    value={`${String(values.report_hour).padStart(2, "0")}:${String(values.report_minute).padStart(2, "0")}`}
+                    disabled={!values.report_enabled}
+                    onChange={(e) => {
+                      const [hour, minute] = e.target.value.split(":").map(Number);
+                      if (!Number.isNaN(hour) && !Number.isNaN(minute)) {
+                        setValues({ ...values, report_hour: hour, report_minute: minute });
+                      }
+                    }}
+                    className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] disabled:opacity-40"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!values.discord_webhook_url || sendingReport}
+                    onClick={handleSendReportNow}
+                  >
+                    <Send className="h-3.5 w-3.5" />{" "}
+                    {sendingReport ? t("settings.reportSending") : t("settings.reportSendNow")}
+                  </Button>
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5">

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.services import app_settings_store, discord_notifier, update_check
+from app.services import app_settings_store, cache_report, discord_notifier, scheduler_service, update_check
 from app.settings import settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -16,6 +16,10 @@ class SettingsUpdate(BaseModel):
     discord_notify_failure: bool | None = None
     discord_notify_disk_warning: bool | None = None
     run_history_limit: int | None = None
+    report_enabled: bool | None = None
+    report_weekday: int | None = None
+    report_hour: int | None = None
+    report_minute: int | None = None
 
 
 class NotificationTestRequest(BaseModel):
@@ -30,7 +34,12 @@ def get_settings():
 @router.post("", summary="Update app settings", description="Partial update -- only non-null fields in the body are changed.")
 def update_settings(body: SettingsUpdate):
     partial = {k: v for k, v in body.model_dump().items() if v is not None}
-    return app_settings_store.update_settings(partial)
+    updated = app_settings_store.update_settings(partial)
+    # Cheap either way (just a remove+re-add of one job) -- always reload
+    # rather than only when a report_* field is present, same unconditional
+    # style as routers/schedule.py's reload_jobs() call.
+    scheduler_service.reload_report_job()
+    return updated
 
 
 @router.post(
@@ -43,6 +52,28 @@ def test_notification(body: NotificationTestRequest):
     if not discord_notifier.send_test_message(body.webhook_url):
         raise HTTPException(status_code=400, detail="Could not deliver the test message -- check the webhook URL.")
     return {"message": "Test message sent."}
+
+
+@router.post(
+    "/notifications/test-report",
+    summary="Send a Discord cache report now",
+    description="Builds the same weekly summary the scheduled report job sends (see cache_report.py) and "
+    "posts it immediately to the given webhook URL -- not necessarily the saved one -- so the user can "
+    "preview it before enabling the weekly schedule.",
+)
+def test_report(body: NotificationTestRequest):
+    summary = cache_report.build_report()
+    delivered = discord_notifier.notify_cache_report(
+        body.webhook_url,
+        total_requests=summary["total_requests"],
+        hit_ratio=summary["hit_ratio"],
+        bandwidth_saved_bytes=summary["bandwidth_saved_bytes"],
+        percent_used=summary["percent_used"],
+        hours_until_full=summary["hours_until_full"],
+    )
+    if not delivered:
+        raise HTTPException(status_code=400, detail="Could not deliver the report -- check the webhook URL.")
+    return {"message": "Report sent."}
 
 
 @router.get(

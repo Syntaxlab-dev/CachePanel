@@ -6,6 +6,7 @@ export type WidgetId =
   | "systemStatus"
   | "diagnostics"
   | "cacheIntegrity"
+  | "cacheForecast"
   | "runHistory"
   | "trafficTimeline"
   | "trafficPerService"
@@ -20,6 +21,7 @@ export const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   "systemStatus",
   "diagnostics",
   "cacheIntegrity",
+  "cacheForecast",
   "runHistory",
   "trafficTimeline",
   "trafficPerService",

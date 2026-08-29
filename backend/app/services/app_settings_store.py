@@ -28,6 +28,13 @@ _DEFAULTS = {
     "discord_notify_failure": True,
     "discord_notify_disk_warning": True,
     "run_history_limit": 50,
+    # Weekly cache-summary report (see cache_report.py/scheduler_service.py's
+    # report job) -- weekday follows APScheduler's CronTrigger convention,
+    # 0=Monday..6=Sunday.
+    "report_enabled": False,
+    "report_weekday": 0,
+    "report_hour": 9,
+    "report_minute": 0,
 }
 
 
