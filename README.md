@@ -24,12 +24,23 @@ been cached. CachePanel replaces both of those with one dashboard:
     available through Battle.net's Tact CDN.
   - **Epic Games**: manual add-by-name (Epic has no public ownership API —
     see [Known limitations](#known-limitations)).
-- **Trigger a download on demand** — no need to wait for the nightly schedule.
-- Dark mode, per-game download sizes (Steam), and a live health check for the
-  core LanCache containers.
+- **Trigger a download on demand** — no need to wait for the nightly schedule,
+  with live log streaming while it runs.
+- **Diagnose cache problems** — DNS/reachability checks answer "why isn't
+  this being cached?", plus a cache-integrity scan for corrupted (0-byte)
+  files.
+- **See who's using it** — per-client traffic stats, run history, a traffic
+  graph over time.
+- **Prometheus metrics + a ready-made Grafana dashboard** (see
+  [Monitoring](#monitoring-prometheus--grafana) below).
+- **Optional Discord notifications** on prefill success/failure and cache
+  disk warnings (see [Discord notifications](#discord-notifications)).
+- Cover art (via SteamGridDB), 5 accent color themes plus dark mode, and a
+  fully customizable dashboard — reorder or hide any tile, saved per browser.
+- Its own login, encrypted secrets at rest, DE/EN UI, optional PostgreSQL
+  storage instead of files (see below).
 
-![Dashboard screenshot](docs/screenshot-dashboard.png)
-<!-- Add real screenshots here once deployed: dashboard, steam, battlenet, epic -->
+![CachePanel dashboard demo](docs/demo.gif)
 
 ## Tech stack
 
