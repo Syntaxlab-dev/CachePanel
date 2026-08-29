@@ -181,7 +181,7 @@ export function Settings() {
                 </label>
                 <Input
                   id="steam_api_key"
-                  placeholder="e.g. 0B1A19E0856CCF9F7725D992BB42166D"
+                  placeholder="e.g. 1A2B3C4D5E6F7A8B9C0D1E2F3A4B5C6D"
                   value={values.steam_api_key}
                   onChange={(e) => setValues({ ...values, steam_api_key: e.target.value })}
                 />
