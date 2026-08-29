@@ -1,14 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   AlertTriangle,
+  ArrowDown,
   ArrowDownCircle,
+  ArrowUp,
   CheckCircle2,
+  Eye,
+  EyeOff,
   Gauge,
   HelpCircle,
   History,
   ScanSearch,
   Server,
+  Settings2,
   Trash2,
   Users,
   XCircle,
@@ -27,8 +32,9 @@ import {
   type HealthStatus,
   type RunHistoryEntry,
 } from "@/lib/api";
-import { formatBytes, formatPercent, formatUptime } from "@/lib/utils";
+import { formatBytes, formatPercent, formatUptime, cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { getStoredLayout, saveLayout, resetLayout, type DashboardLayout, type WidgetId } from "@/lib/dashboardLayout";
 
 const SERVICE_LABEL: Record<string, string> = {
   steam: "Steam",
@@ -48,6 +54,8 @@ export function Dashboard() {
   const [scan, setScan] = useState<CacheScanResult | null>(null);
   const [scanning, setScanning] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+  const [layout, setLayout] = useState<DashboardLayout>(() => getStoredLayout());
+  const [customizing, setCustomizing] = useState(false);
 
   useEffect(() => {
     api
@@ -105,6 +113,39 @@ export function Dashboard() {
     }
   }
 
+  function moveWidget(id: WidgetId, direction: -1 | 1) {
+    setLayout((prev) => {
+      const index = prev.order.indexOf(id);
+      const swapWith = index + direction;
+      // Swaps within the full known-widget order, not just the currently
+      // visible/available ones -- simpler and robust, at the cost of an
+      // occasional no-visible-effect click if the neighbor in that
+      // direction happens to be a widget with no data yet (e.g. diagnostics
+      // before the API call resolves). Acceptable trade-off for a small
+      // panel; a "visible order only" version would need to reconcile two
+      // different orderings on every render for a rare edge case.
+      if (index === -1 || swapWith < 0 || swapWith >= prev.order.length) return prev;
+      const next = [...prev.order];
+      [next[index], next[swapWith]] = [next[swapWith], next[index]];
+      const updated = { ...prev, order: next };
+      saveLayout(updated);
+      return updated;
+    });
+  }
+
+  function toggleWidgetHidden(id: WidgetId) {
+    setLayout((prev) => {
+      const hidden = prev.hidden.includes(id) ? prev.hidden.filter((h) => h !== id) : [...prev.hidden, id];
+      const updated = { ...prev, hidden };
+      saveLayout(updated);
+      return updated;
+    });
+  }
+
+  function handleResetLayout() {
+    setLayout(resetLayout());
+  }
+
   if (error) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
@@ -119,39 +160,16 @@ export function Dashboard() {
 
   const { overall, services, recent_activity, timeline, top_clients } = stats;
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("dashboard.title")}</h1>
-        <p className="text-sm text-[var(--muted)]">{t("dashboard.subtitle")}</p>
-      </div>
+  // Only the widgets that currently have something to show get an entry
+  // here -- same conditions the old inline `{health && (...)}` etc. guards
+  // used, just centralized so the render loop below can treat every
+  // widget uniformly (present in layout.order + widgetDefs = renderable).
+  const widgetDefs: Partial<Record<WidgetId, { title: string; node: ReactNode }>> = {};
 
-      <OnboardingBanner />
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={<Gauge className="h-4 w-4" />}
-          label={t("dashboard.stat.hitRatio")}
-          value={formatPercent(overall.hit_ratio)}
-        />
-        <StatCard
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          label={t("dashboard.stat.fromCache")}
-          value={formatBytes(overall.hit_bytes)}
-        />
-        <StatCard
-          icon={<ArrowDownCircle className="h-4 w-4" />}
-          label={t("dashboard.stat.newlyDownloaded")}
-          value={formatBytes(overall.miss_bytes)}
-        />
-        <StatCard
-          icon={<Gauge className="h-4 w-4" />}
-          label={t("dashboard.stat.totalRequests")}
-          value={overall.total_requests.toLocaleString(locale)}
-        />
-      </div>
-
-      {health && (
+  if (health) {
+    widgetDefs.systemStatus = {
+      title: t("dashboard.systemStatus"),
+      node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -187,9 +205,14 @@ export function Dashboard() {
             })}
           </CardContent>
         </Card>
-      )}
+      ),
+    };
+  }
 
-      {checks && checks.length > 0 && (
+  if (checks && checks.length > 0) {
+    widgetDefs.diagnostics = {
+      title: t("dashboard.diagnostics"),
+      node: (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -205,8 +228,13 @@ export function Dashboard() {
             ))}
           </CardContent>
         </Card>
-      )}
+      ),
+    };
+  }
 
+  widgetDefs.cacheIntegrity = {
+    title: t("dashboard.cacheIntegrity"),
+    node: (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -250,8 +278,13 @@ export function Dashboard() {
           )}
         </CardContent>
       </Card>
+    ),
+  };
 
-      {history && history.length > 0 && (
+  if (history && history.length > 0) {
+    widgetDefs.runHistory = {
+      title: t("dashboard.runHistory"),
+      node: (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -279,8 +312,13 @@ export function Dashboard() {
             </div>
           </CardContent>
         </Card>
-      )}
+      ),
+    };
+  }
 
+  widgetDefs.trafficTimeline = {
+    title: t("dashboard.trafficTimeline"),
+    node: (
       <Card>
         <CardHeader>
           <CardTitle>{t("dashboard.trafficTimeline")}</CardTitle>
@@ -289,7 +327,12 @@ export function Dashboard() {
           <TrafficChart data={timeline} />
         </CardContent>
       </Card>
+    ),
+  };
 
+  widgetDefs.trafficPerService = {
+    title: t("dashboard.trafficPerService"),
+    node: (
       <Card>
         <CardHeader>
           <CardTitle>{t("dashboard.trafficPerService")}</CardTitle>
@@ -316,7 +359,12 @@ export function Dashboard() {
           ))}
         </CardContent>
       </Card>
+    ),
+  };
 
+  widgetDefs.topClients = {
+    title: t("dashboard.topClients"),
+    node: (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -347,7 +395,12 @@ export function Dashboard() {
           )}
         </CardContent>
       </Card>
+    ),
+  };
 
+  widgetDefs.recentActivity = {
+    title: t("dashboard.recentActivity"),
+    node: (
       <Card>
         <CardHeader>
           <CardTitle>{t("dashboard.recentActivity")}</CardTitle>
@@ -375,6 +428,159 @@ export function Dashboard() {
           )}
         </CardContent>
       </Card>
+    ),
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("dashboard.title")}</h1>
+          <p className="text-sm text-[var(--muted)]">{t("dashboard.subtitle")}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {customizing && (
+            <Button variant="outline" size="sm" onClick={handleResetLayout}>
+              {t("dashboard.customize.reset")}
+            </Button>
+          )}
+          <Button variant={customizing ? "default" : "outline"} size="sm" onClick={() => setCustomizing((c) => !c)}>
+            <Settings2 className="h-3.5 w-3.5" />
+            {customizing ? t("dashboard.customize.done") : t("dashboard.customize")}
+          </Button>
+        </div>
+      </div>
+
+      <OnboardingBanner />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          icon={<Gauge className="h-4 w-4" />}
+          label={t("dashboard.stat.hitRatio")}
+          value={formatPercent(overall.hit_ratio)}
+        />
+        <StatCard
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          label={t("dashboard.stat.fromCache")}
+          value={formatBytes(overall.hit_bytes)}
+        />
+        <StatCard
+          icon={<ArrowDownCircle className="h-4 w-4" />}
+          label={t("dashboard.stat.newlyDownloaded")}
+          value={formatBytes(overall.miss_bytes)}
+        />
+        <StatCard
+          icon={<Gauge className="h-4 w-4" />}
+          label={t("dashboard.stat.totalRequests")}
+          value={overall.total_requests.toLocaleString(locale)}
+        />
+      </div>
+
+      {layout.order.map((id, index) => {
+        const def = widgetDefs[id];
+        if (!def) return null;
+        const isHidden = layout.hidden.includes(id);
+        if (!customizing && isHidden) return null;
+        return (
+          <DashboardWidget
+            key={id}
+            title={def.title}
+            hidden={isHidden}
+            customizing={customizing}
+            canMoveUp={index > 0}
+            canMoveDown={index < layout.order.length - 1}
+            onMoveUp={() => moveWidget(id, -1)}
+            onMoveDown={() => moveWidget(id, 1)}
+            onToggleHidden={() => toggleWidgetHidden(id)}
+            moveUpLabel={t("dashboard.customize.moveUp")}
+            moveDownLabel={t("dashboard.customize.moveDown")}
+            hideLabel={t("dashboard.customize.hide")}
+            showLabel={t("dashboard.customize.show")}
+            hiddenLabel={t("dashboard.customize.hidden")}
+          >
+            {def.node}
+          </DashboardWidget>
+        );
+      })}
+    </div>
+  );
+}
+
+function DashboardWidget({
+  title,
+  hidden,
+  customizing,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+  onToggleHidden,
+  moveUpLabel,
+  moveDownLabel,
+  hideLabel,
+  showLabel,
+  hiddenLabel,
+  children,
+}: {
+  title: string;
+  hidden: boolean;
+  customizing: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onToggleHidden: () => void;
+  moveUpLabel: string;
+  moveDownLabel: string;
+  hideLabel: string;
+  showLabel: string;
+  hiddenLabel: string;
+  children: ReactNode;
+}) {
+  if (!customizing) {
+    return hidden ? null : <>{children}</>;
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs">
+        <span className="flex items-center gap-2 font-medium">
+          {title}
+          {hidden && <Badge variant="warn">{hiddenLabel}</Badge>}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={moveUpLabel}
+            title={moveUpLabel}
+            onClick={onMoveUp}
+            disabled={!canMoveUp}
+            className="rounded p-1 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)] disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={moveDownLabel}
+            title={moveDownLabel}
+            onClick={onMoveDown}
+            disabled={!canMoveDown}
+            className="rounded p-1 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)] disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={hidden ? showLabel : hideLabel}
+            title={hidden ? showLabel : hideLabel}
+            onClick={onToggleHidden}
+            className="rounded p-1 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
+          >
+            {hidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+      </div>
+      <div className={cn(hidden && "pointer-events-none opacity-40")}>{children}</div>
     </div>
   );
 }

@@ -211,6 +211,15 @@ const dictionaries = {
     "prefill.finishedWithExitPrefix": "Beendet mit Exit-Code",
     "prefill.completed": "Download abgeschlossen.",
     "prefill.exitedWithCodePrefix": "Lief mit Exit-Code",
+
+    "dashboard.customize": "Anpassen",
+    "dashboard.customize.done": "Fertig",
+    "dashboard.customize.reset": "Zurücksetzen",
+    "dashboard.customize.moveUp": "Nach oben verschieben",
+    "dashboard.customize.moveDown": "Nach unten verschieben",
+    "dashboard.customize.hide": "Ausblenden",
+    "dashboard.customize.show": "Einblenden",
+    "dashboard.customize.hidden": "Ausgeblendet",
   },
   en: {
     "nav.dashboard": "Dashboard",
@@ -413,6 +422,15 @@ const dictionaries = {
     "prefill.finishedWithExitPrefix": "Finished with exit code",
     "prefill.completed": "Download complete.",
     "prefill.exitedWithCodePrefix": "Exited with code",
+
+    "dashboard.customize": "Customize",
+    "dashboard.customize.done": "Done",
+    "dashboard.customize.reset": "Reset",
+    "dashboard.customize.moveUp": "Move up",
+    "dashboard.customize.moveDown": "Move down",
+    "dashboard.customize.hide": "Hide",
+    "dashboard.customize.show": "Show",
+    "dashboard.customize.hidden": "Hidden",
   },
 } as const;
 
