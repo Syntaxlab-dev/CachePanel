@@ -33,17 +33,31 @@ requests are the only methods that pass through for a viewer -- everything
 that mutates state (POST/PUT/PATCH/DELETE) is blocked regardless of path.
 /api/auth/* stays fully exempt as before (a viewer must still be able to
 log out, and the /totp/* endpoints there do their own session check).
+
+Also since the 3rd feature round (Welle 2): a request carrying a valid
+`Authorization: Bearer <token>` header (see services/api_token_store.py)
+is treated as authenticated with an implicit "viewer" role, WITHOUT a
+session cookie -- this is the read-only path third-party integrations
+(Home Assistant, personal scripts) use. It's additive, not a replacement:
+checked first, but only takes over the request if the token actually
+verifies; anything else (no header, or a header that doesn't match a
+stored token) falls straight through to the existing session-cookie logic
+below unchanged. Deliberately excluded from /api/tokens/* itself -- token
+*management* must only ever be reachable via a real admin session (see
+routers/api_tokens.py's own docstring), otherwise a leaked read-only token
+could mint itself more tokens.
 """
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from app.services import auth_credentials_store
+from app.services import api_token_store, auth_credentials_store
 
 _EXEMPT_PREFIX = "/api/auth/"
 _SETUP_EXEMPT_PATHS = {"/api/backup/restore"}
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+_TOKEN_MGMT_PREFIX = "/api/tokens"
 
 
 class AuthGuardMiddleware(BaseHTTPMiddleware):
@@ -55,6 +69,15 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
 
         if path.startswith(_EXEMPT_PREFIX):
             return await call_next(request)
+
+        if not path.startswith(_TOKEN_MGMT_PREFIX):
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.startswith("Bearer "):
+                raw_token = auth_header.removeprefix("Bearer ").strip()
+                if raw_token and api_token_store.verify_token(raw_token):
+                    if request.method not in _SAFE_METHODS:
+                        return JSONResponse({"detail": "read_only"}, status_code=403)
+                    return await call_next(request)
 
         if not auth_credentials_store.is_configured():
             if path in _SETUP_EXEMPT_PATHS:

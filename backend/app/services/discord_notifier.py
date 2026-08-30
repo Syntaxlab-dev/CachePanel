@@ -48,6 +48,22 @@ def notify_disk_warning(webhook_url: str, percent_used: float) -> None:
     )
 
 
+def notify_auto_cleanup(webhook_url: str, deleted_count: int) -> None:
+    """Sent after scheduler_service.py's periodic corruption check finds
+    and automatically deletes 0-byte cache files (opt-in, see
+    app_settings_store.py's auto_clean_corruption_enabled) -- purely
+    informational after the fact, this notification carries no action."""
+    _post(webhook_url, f":broom: Automatically removed **{deleted_count}** corrupted (0-byte) cache file(s).")
+
+
+def notify_traffic_alert(webhook_url: str, service: str, gb_used: float, threshold_gb: float) -> None:
+    _post(
+        webhook_url,
+        f":chart_with_upwards_trend: **{service}** traffic in the last 24h ({gb_used:.1f} GB) "
+        f"crossed the configured alert threshold ({threshold_gb:.1f} GB).",
+    )
+
+
 def send_test_message(webhook_url: str) -> bool:
     """Used by the Settings page's "send test message" button -- takes the
     URL directly rather than reading it from stored settings, so the user

@@ -9,6 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.auth_guard import AuthGuardMiddleware
 from app.security_headers import SecurityHeadersMiddleware
 from app.routers import (
+    api_tokens,
     auth,
     backup,
     battlenet,
@@ -80,6 +81,7 @@ app.include_router(metrics.router)
 app.include_router(backup.router)
 app.include_router(users.router)
 app.include_router(public_display.router)
+app.include_router(api_tokens.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 

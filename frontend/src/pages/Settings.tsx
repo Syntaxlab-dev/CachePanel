@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Archive, Bell, CheckCircle2, Download, ExternalLink, Heart, Image, Info, KeyRound, LogIn, Palette, Send, ShieldCheck, Sparkles, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
+import { AlertCircle, Archive, Bell, CheckCircle2, Download, ExternalLink, Heart, Image, Info, KeyRound, LogIn, Palette, Send, ShieldCheck, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScheduleCard } from "@/components/ScheduleCard";
-import { api, type AppSettings, type BackupBundle, type ExportBundle, type PanelRole, type PanelUser, type UpdateCheckResult, type VersionInfo } from "@/lib/api";
+import { api, type ApiToken, type AppSettings, type BackupBundle, type ExportBundle, type PanelRole, type PanelUser, type UpdateCheckResult, type VersionInfo } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { ACCENTS, getStoredAccent, setAccent, type Accent } from "@/lib/theme";
@@ -15,6 +15,7 @@ export function Settings() {
   const { t } = useI18n();
   const { role: myRole, totpEnabled, refresh: refreshAuth } = useAuth();
   const isViewer = myRole === "viewer";
+  const isAdmin = myRole === "admin";
   const [accent, setAccentState] = useState<Accent>(() => getStoredAccent());
   const [values, setValues] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +40,11 @@ export function Settings() {
   const [totpConfirmCode, setTotpConfirmCode] = useState("");
   const [totpDisablePassword, setTotpDisablePassword] = useState("");
   const [totpBusy, setTotpBusy] = useState(false);
+  const [tokens, setTokens] = useState<ApiToken[] | null>(null);
+  const [newTokenLabel, setNewTokenLabel] = useState("");
+  const [creatingToken, setCreatingToken] = useState(false);
+  const [justCreatedToken, setJustCreatedToken] = useState<string | null>(null);
+  const [deletingTokenId, setDeletingTokenId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const backupFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -47,6 +53,13 @@ export function Settings() {
       .listUsers()
       .then((data) => setUsers(data.users))
       .catch(() => setUsers(null));
+  }
+
+  function reloadTokens() {
+    api
+      .listTokens()
+      .then((data) => setTokens(data.tokens))
+      .catch(() => setTokens(null));
   }
 
   useEffect(() => {
@@ -69,6 +82,15 @@ export function Settings() {
       window.history.replaceState({}, "", "/settings");
     }
   }, []);
+
+  // Separate from the effect above -- myRole isn't known yet on first
+  // render (useAuth()'s own status fetch is still in flight), and only an
+  // admin session can reach GET /api/tokens at all (see api_tokens.py),
+  // so this waits for that to resolve rather than firing (and failing)
+  // eagerly for a viewer or before login state settles.
+  useEffect(() => {
+    if (isAdmin) reloadTokens();
+  }, [isAdmin]);
 
   function handleAccentChange(next: Accent) {
     setAccent(next);
@@ -161,6 +183,49 @@ export function Settings() {
       toast.error(err instanceof Error ? err.message : t("settings.usersRemoveFailed"));
     } finally {
       setRemovingUser(null);
+    }
+  }
+
+  async function handleCreateToken(e: FormEvent) {
+    e.preventDefault();
+    const label = newTokenLabel.trim();
+    if (!label) return;
+    setCreatingToken(true);
+    try {
+      const result = await api.createToken(label);
+      setJustCreatedToken(result.token);
+      setNewTokenLabel("");
+      reloadTokens();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.apiTokensCreateFailed"));
+    } finally {
+      setCreatingToken(false);
+    }
+  }
+
+  async function handleCopyToken() {
+    if (!justCreatedToken) return;
+    try {
+      await navigator.clipboard.writeText(justCreatedToken);
+      toast.success(t("settings.apiTokensCopiedNotice"));
+    } catch {
+      // Clipboard API can fail (permissions, insecure context) -- the raw
+      // value stays visible on screen either way, so this is just a lost
+      // convenience, not a blocker.
+    }
+  }
+
+  async function handleDeleteToken(id: number) {
+    if (!window.confirm(t("settings.apiTokensDeleteConfirm"))) return;
+    setDeletingTokenId(id);
+    try {
+      await api.deleteToken(id);
+      toast.success(t("settings.apiTokensDeleted"));
+      reloadTokens();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.apiTokensDeleteFailed"));
+    } finally {
+      setDeletingTokenId(null);
     }
   }
 
@@ -681,6 +746,25 @@ export function Settings() {
                 </label>
               </div>
 
+              <div className="flex flex-col gap-1.5 border-t border-[var(--border)] pt-4">
+                <label htmlFor="traffic_alert_threshold_gb" className="text-sm font-medium">
+                  {t("settings.trafficAlertLabel")}
+                </label>
+                <Input
+                  id="traffic_alert_threshold_gb"
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  className="max-w-32"
+                  value={values.traffic_alert_threshold_gb}
+                  onChange={(e) =>
+                    setValues({ ...values, traffic_alert_threshold_gb: Number(e.target.value) || 0 })
+                  }
+                  disabled={isViewer}
+                />
+                <p className="text-xs text-[var(--muted)]">{t("settings.trafficAlertHint")}</p>
+              </div>
+
               <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4">
                 <label className="flex items-center gap-2 text-sm font-medium">
                   <input
@@ -848,6 +932,188 @@ export function Settings() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Archive className="h-4 w-4" /> {t("settings.autoBackup")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!values ? (
+            <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={values.auto_backup_enabled}
+                  onChange={(e) => setValues({ ...values, auto_backup_enabled: e.target.checked })}
+                  disabled={isViewer}
+                />
+                {t("settings.autoBackupEnabled")}
+              </label>
+              <p className="text-xs text-[var(--muted)]">{t("settings.autoBackupHint")}</p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                  aria-label={t("settings.autoBackupWeekday")}
+                  value={values.auto_backup_weekday}
+                  disabled={!values.auto_backup_enabled || isViewer}
+                  onChange={(e) => setValues({ ...values, auto_backup_weekday: Number(e.target.value) })}
+                  className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] disabled:opacity-40"
+                >
+                  {([0, 1, 2, 3, 4, 5, 6] as const).map((d) => (
+                    <option key={d} value={d}>
+                      {t(`settings.weekday.${d}` as const)}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="time"
+                  aria-label={t("settings.autoBackupTime")}
+                  value={`${String(values.auto_backup_hour).padStart(2, "0")}:${String(values.auto_backup_minute).padStart(2, "0")}`}
+                  disabled={!values.auto_backup_enabled || isViewer}
+                  onChange={(e) => {
+                    const [hour, minute] = e.target.value.split(":").map(Number);
+                    if (!Number.isNaN(hour) && !Number.isNaN(minute)) {
+                      setValues({ ...values, auto_backup_hour: hour, auto_backup_minute: minute });
+                    }
+                  }}
+                  className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] disabled:opacity-40"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="auto_backup_retention" className="text-sm font-medium">
+                  {t("settings.autoBackupRetentionLabel")}
+                </label>
+                <Input
+                  id="auto_backup_retention"
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="max-w-32"
+                  value={values.auto_backup_retention}
+                  onChange={(e) =>
+                    setValues({ ...values, auto_backup_retention: Number(e.target.value) || 7 })
+                  }
+                  disabled={isViewer}
+                />
+                <p className="text-xs text-[var(--muted)]">{t("settings.autoBackupRetentionHint")}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={isViewer || saving}>
+                  {saving ? t("settings.saving") : t("settings.save")}
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trash2 className="h-4 w-4" /> {t("settings.autoCleanup")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!values ? (
+            <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={values.auto_clean_corruption_enabled}
+                  onChange={(e) => setValues({ ...values, auto_clean_corruption_enabled: e.target.checked })}
+                  disabled={isViewer}
+                />
+                {t("settings.autoCleanupEnabled")}
+              </label>
+              <p className="text-xs text-[var(--muted)]">{t("settings.autoCleanupHint")}</p>
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={isViewer || saving}>
+                  {saving ? t("settings.saving") : t("settings.save")}
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Terminal className="h-4 w-4" /> {t("settings.apiTokens")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-xs text-[var(--muted)]">{t("settings.apiTokensHint")}</p>
+
+            {justCreatedToken && (
+              <div className="flex flex-col gap-2 rounded-lg border border-[var(--accent)] bg-[var(--accent-soft)] p-3">
+                <p className="text-sm font-medium text-[var(--accent)]">{t("settings.apiTokensCreatedNotice")}</p>
+                <code className="break-all rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 text-xs">
+                  {justCreatedToken}
+                </code>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={handleCopyToken}>
+                    {t("settings.apiTokensCopy")}
+                  </Button>
+                  <p className="text-xs text-[var(--muted)]">{t("settings.apiTokensNeverShownAgain")}</p>
+                </div>
+              </div>
+            )}
+
+            {tokens === null ? (
+              <p className="text-sm text-[var(--muted)]">{t("settings.apiTokensLoadFailed")}</p>
+            ) : tokens.length === 0 ? (
+              <p className="text-sm text-[var(--muted)]">{t("settings.apiTokensEmpty")}</p>
+            ) : (
+              <div className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+                {tokens.map((tok) => (
+                  <div key={tok.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="flex flex-col">
+                      <span className="font-medium">{tok.label}</span>
+                      <span className="text-xs text-[var(--muted)]">
+                        {t("settings.apiTokensCreatedPrefix")} {new Date(tok.created_date).toLocaleDateString()}
+                      </span>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={deletingTokenId === tok.id}
+                      onClick={() => handleDeleteToken(tok.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> {t("settings.apiTokensDelete")}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateToken} className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-end">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label htmlFor="new_token_label" className="text-sm font-medium">
+                  {t("settings.apiTokensNameLabel")}
+                </label>
+                <Input
+                  id="new_token_label"
+                  placeholder={t("settings.apiTokensNamePlaceholder")}
+                  value={newTokenLabel}
+                  onChange={(e) => setNewTokenLabel(e.target.value)}
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={creatingToken}>
+                {creatingToken ? t("settings.apiTokensCreating") : t("settings.apiTokensCreate")}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <ScheduleCard />
 

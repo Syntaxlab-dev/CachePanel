@@ -63,6 +63,18 @@ _SCHEMA_STATEMENTS = [
         totp_enabled BOOLEAN NOT NULL DEFAULT FALSE
     )
     """,
+    # Read-only third-party API tokens (3rd feature round, Welle 2) -- see
+    # api_token_store.py. created_date is TEXT (an ISO string written by
+    # Python), same convention run_history.started_at already uses here,
+    # not a native TIMESTAMPTZ column.
+    """
+    CREATE TABLE IF NOT EXISTS api_tokens (
+        id SERIAL PRIMARY KEY,
+        label TEXT NOT NULL,
+        token_hash TEXT UNIQUE NOT NULL,
+        created_date TEXT NOT NULL
+    )
+    """,
 ]
 
 # Run unconditionally, after _SCHEMA_STATEMENTS, on every startup -- each

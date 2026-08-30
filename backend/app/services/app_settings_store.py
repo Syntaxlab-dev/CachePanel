@@ -49,6 +49,28 @@ _DEFAULTS = {
     # server URL alone isn't enough to publish anywhere).
     "ntfy_server_url": "https://ntfy.sh",
     "ntfy_topic": "",
+    # Automatic scheduled backups (routers/backup.py's write_auto_backup(),
+    # scheduler_service.py's job) -- off by default, weekday follows the
+    # same APScheduler convention as report_weekday (0=Monday). retention
+    # is how many of the newest backup-*.json files to keep in
+    # /data/backups before older ones are deleted.
+    "auto_backup_enabled": False,
+    "auto_backup_weekday": 0,
+    "auto_backup_hour": 3,
+    "auto_backup_minute": 0,
+    "auto_backup_retention": 7,
+    # Auto-delete 0-byte corrupted cache files found by the periodic scan
+    # (see cache_manager.py's scan_for_corruption()/clean_corrupted_files(),
+    # both pre-existing and reused as-is here). Off by default: this is the
+    # one setting in this file that triggers a destructive action on its
+    # own schedule rather than just sending a notification, so it stays
+    # opt-in even though the detection itself is narrow/safe (0-byte files
+    # only, see cache_manager.py's own reasoning).
+    "auto_clean_corruption_enabled": False,
+    # Per-service traffic alert -- one global threshold (GB in the last
+    # ~24h of log tail) applied to every service independently; 0 = off,
+    # same "0/blank = off" contract as every other optional field here.
+    "traffic_alert_threshold_gb": 0.0,
 }
 
 

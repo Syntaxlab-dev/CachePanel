@@ -24,6 +24,13 @@ class SettingsUpdate(BaseModel):
     heartbeat_url: str | None = None
     ntfy_server_url: str | None = None
     ntfy_topic: str | None = None
+    auto_backup_enabled: bool | None = None
+    auto_backup_weekday: int | None = None
+    auto_backup_hour: int | None = None
+    auto_backup_minute: int | None = None
+    auto_backup_retention: int | None = None
+    auto_clean_corruption_enabled: bool | None = None
+    traffic_alert_threshold_gb: float | None = None
 
 
 class NotificationTestRequest(BaseModel):
@@ -44,10 +51,11 @@ def get_settings():
 def update_settings(body: SettingsUpdate):
     partial = {k: v for k, v in body.model_dump().items() if v is not None}
     updated = app_settings_store.update_settings(partial)
-    # Cheap either way (just a remove+re-add of one job) -- always reload
-    # rather than only when a report_* field is present, same unconditional
-    # style as routers/schedule.py's reload_jobs() call.
+    # Cheap either way (just a remove+re-add of one job each) -- always
+    # reload rather than only when a relevant field is present, same
+    # unconditional style as routers/schedule.py's reload_jobs() call.
     scheduler_service.reload_report_job()
+    scheduler_service.reload_auto_backup_job()
     return updated
 
 

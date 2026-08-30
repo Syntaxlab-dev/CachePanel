@@ -17,9 +17,19 @@ import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.services import app_settings_store, cache_manager, cache_report, discord_notifier, ntfy_notifier, schedule_store
+from app.services import (
+    app_settings_store,
+    backup_builder,
+    cache_manager,
+    cache_report,
+    discord_notifier,
+    ntfy_notifier,
+    schedule_store,
+)
 from app.services.cache_manager import CacheManagerError
+from app.services.log_parser import aggregate_service_stats, iter_access_entries
 from app.services.prefill_runner import PrefillRunnerError, trigger_prefill
+from app.settings import settings
 
 logger = logging.getLogger("cachepanel.scheduler")
 
@@ -35,11 +45,25 @@ _HEARTBEAT_JOB_ID = "heartbeat-ping"
 _HEARTBEAT_INTERVAL_MINUTES = 1
 _HEARTBEAT_REQUEST_TIMEOUT = 5
 
+_AUTO_BACKUP_JOB_ID = "auto-backup"
+
+_AUTO_CLEANUP_JOB_ID = "auto-cleanup-check"
+_AUTO_CLEANUP_INTERVAL_MINUTES = 360
+
+_TRAFFIC_ALERT_JOB_ID = "traffic-alert-check"
+_TRAFFIC_ALERT_INTERVAL_MINUTES = 30
+_BYTES_PER_GB = 1024**3
+
 # Tracks whether a disk-warning notification has already fired for the
 # *current* above-threshold spell, so a still-full disk doesn't re-notify
 # every single interval -- only on the transition, and again after it drops
 # back below the threshold and crosses it again.
 _disk_warning_active = False
+
+# Same idea as _disk_warning_active, but keyed per service -- several
+# services can independently be above/below the traffic threshold at once,
+# a single bool can't represent that.
+_traffic_alert_active: dict[str, bool] = {}
 
 
 def _run_job(service: str) -> None:
@@ -105,6 +129,85 @@ def _send_cache_report() -> None:
     )
 
 
+def _run_auto_backup() -> None:
+    cfg = app_settings_store.get_settings()
+    if not cfg.get("auto_backup_enabled"):
+        return
+    try:
+        backup_builder.write_auto_backup(cfg.get("auto_backup_retention", 7))
+    except OSError:
+        logger.exception("Automatic backup failed")
+
+
+def _run_auto_cleanup_check() -> None:
+    cfg = app_settings_store.get_settings()
+    if not cfg.get("auto_clean_corruption_enabled"):
+        return
+
+    try:
+        scan = cache_manager.scan_for_corruption()
+    except CacheManagerError:
+        logger.exception("Auto-cleanup check could not scan for corruption")
+        return
+    if scan.corrupt_file_count == 0:
+        return
+
+    try:
+        cache_manager.clean_corrupted_files()
+    except CacheManagerError:
+        logger.exception("Auto-cleanup could not delete corrupted files")
+        return
+
+    webhook_url = cfg.get("discord_webhook_url") or ""
+    ntfy_topic = cfg.get("ntfy_topic") or ""
+    if webhook_url:
+        discord_notifier.notify_auto_cleanup(webhook_url, scan.corrupt_file_count)
+    if ntfy_topic:
+        ntfy_notifier.notify_auto_cleanup(cfg.get("ntfy_server_url") or "", ntfy_topic, scan.corrupt_file_count)
+
+
+def _check_traffic_alert() -> None:
+    cfg = app_settings_store.get_settings()
+    threshold_gb = cfg.get("traffic_alert_threshold_gb") or 0
+    if not threshold_gb:
+        _traffic_alert_active.clear()
+        return
+
+    webhook_url = cfg.get("discord_webhook_url") or ""
+    ntfy_topic = cfg.get("ntfy_topic") or ""
+    if not webhook_url and not ntfy_topic:
+        return
+
+    access_path = settings.lancache_log_dir / "access.log"
+    entries = iter_access_entries(access_path, max_lines=100_000)
+    stats_by_service = aggregate_service_stats(entries)
+    threshold_bytes = threshold_gb * _BYTES_PER_GB
+
+    seen_services = set()
+    for service, stat in stats_by_service.items():
+        seen_services.add(service)
+        total_bytes = stat.hit_bytes + stat.miss_bytes
+        if total_bytes >= threshold_bytes:
+            if not _traffic_alert_active.get(service):
+                gb_used = total_bytes / _BYTES_PER_GB
+                if webhook_url:
+                    discord_notifier.notify_traffic_alert(webhook_url, service, gb_used, threshold_gb)
+                if ntfy_topic:
+                    ntfy_notifier.notify_traffic_alert(
+                        cfg.get("ntfy_server_url") or "", ntfy_topic, service, gb_used, threshold_gb
+                    )
+                _traffic_alert_active[service] = True
+        else:
+            _traffic_alert_active[service] = False
+
+    # A service that dropped out of the log tail entirely (no recent
+    # activity at all) should also reset, so a later resurgence can alert
+    # again rather than staying silently "already active" forever.
+    for service in list(_traffic_alert_active):
+        if service not in seen_services:
+            _traffic_alert_active.pop(service, None)
+
+
 def reload_report_job() -> None:
     """Removes and re-adds the weekly report job with the current settings'
     weekday/hour/minute -- same remove-then-add pattern as reload_jobs()
@@ -124,6 +227,27 @@ def reload_report_job() -> None:
                 minute=cfg.get("report_minute", 0),
             ),
             id=_REPORT_JOB_ID,
+            replace_existing=True,
+        )
+
+
+def reload_auto_backup_job() -> None:
+    """Same remove-then-add pattern as reload_report_job() -- called after
+    every settings save so a changed backup schedule takes effect
+    immediately."""
+    cfg = app_settings_store.get_settings()
+    existing = _scheduler.get_job(_AUTO_BACKUP_JOB_ID)
+    if existing:
+        existing.remove()
+    if cfg.get("auto_backup_enabled"):
+        _scheduler.add_job(
+            _run_auto_backup,
+            trigger=CronTrigger(
+                day_of_week=cfg.get("auto_backup_weekday", 0),
+                hour=cfg.get("auto_backup_hour", 3),
+                minute=cfg.get("auto_backup_minute", 0),
+            ),
+            id=_AUTO_BACKUP_JOB_ID,
             replace_existing=True,
         )
 
@@ -150,6 +274,7 @@ def start_and_reload() -> None:
         _scheduler.start()
     reload_jobs()
     reload_report_job()
+    reload_auto_backup_job()
     _scheduler.add_job(
         _check_disk_warning,
         trigger="interval",
@@ -162,6 +287,20 @@ def start_and_reload() -> None:
         trigger="interval",
         minutes=_HEARTBEAT_INTERVAL_MINUTES,
         id=_HEARTBEAT_JOB_ID,
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _run_auto_cleanup_check,
+        trigger="interval",
+        minutes=_AUTO_CLEANUP_INTERVAL_MINUTES,
+        id=_AUTO_CLEANUP_JOB_ID,
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _check_traffic_alert,
+        trigger="interval",
+        minutes=_TRAFFIC_ALERT_INTERVAL_MINUTES,
+        id=_TRAFFIC_ALERT_JOB_ID,
         replace_existing=True,
     )
 

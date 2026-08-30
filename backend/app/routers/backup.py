@@ -33,6 +33,11 @@ carries `role` (str), `totp_secret` (str or null) and `totp_enabled`
 (bool) -- see the widened `auth` field type below, which used to be
 `dict[str, str]` and would otherwise reject a real backup taken after this
 round with a Pydantic validation error on `totp_enabled` not being a string.
+
+The bundle-assembly logic itself lives in services/backup_builder.py, not
+here -- see that module's docstring for why (scheduler_service.py's
+automatic-backup job needs the same builder without a service importing a
+router).
 """
 
 import base64
@@ -40,11 +45,11 @@ import base64
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.services import app_settings_store, auth_credentials_store, run_history_store, schedule_store
+from app.services import app_settings_store, auth_credentials_store, backup_builder, run_history_store, schedule_store
 
 router = APIRouter(prefix="/api/backup", tags=["backup"])
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = backup_builder.SCHEMA_VERSION
 
 
 class BackupBundle(BaseModel):
@@ -71,13 +76,7 @@ class BackupBundle(BaseModel):
     "hash, never a plaintext password.",
 )
 def get_backup():
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "settings_encrypted": base64.b64encode(app_settings_store.get_encrypted_blob()).decode("ascii"),
-        "schedule": schedule_store.get_schedule(),
-        "run_history": run_history_store.get_history(),
-        "auth": auth_credentials_store.get_credentials(),
-    }
+    return backup_builder.build_backup_bundle()
 
 
 @router.post(

@@ -58,6 +58,26 @@ def notify_disk_warning(server_url: str, topic: str, percent_used: float) -> Non
     )
 
 
+def notify_auto_cleanup(server_url: str, topic: str, deleted_count: int) -> None:
+    _publish(
+        server_url,
+        topic,
+        "CachePanel",
+        f"Automatically removed {deleted_count} corrupted (0-byte) cache file(s).",
+    )
+
+
+def notify_traffic_alert(server_url: str, topic: str, service: str, gb_used: float, threshold_gb: float) -> None:
+    _publish(
+        server_url,
+        topic,
+        "CachePanel",
+        f"{service} traffic in the last 24h ({gb_used:.1f} GB) crossed the configured alert threshold "
+        f"({threshold_gb:.1f} GB).",
+        priority="high",
+    )
+
+
 def send_test_message(server_url: str, topic: str) -> bool:
     """Used by the Settings page's "send test message" button -- takes the
     server/topic directly rather than reading them from stored settings, so

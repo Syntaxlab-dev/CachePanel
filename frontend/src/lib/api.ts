@@ -82,6 +82,19 @@ export interface AppSettings {
   heartbeat_url: string;
   ntfy_server_url: string;
   ntfy_topic: string;
+  auto_backup_enabled: boolean;
+  auto_backup_weekday: number;
+  auto_backup_hour: number;
+  auto_backup_minute: number;
+  auto_backup_retention: number;
+  auto_clean_corruption_enabled: boolean;
+  traffic_alert_threshold_gb: number;
+}
+
+export interface ApiToken {
+  id: number;
+  label: string;
+  created_date: string;
 }
 
 export interface CacheForecast {
@@ -333,6 +346,11 @@ export const api = {
   getSchedule: () => request<ScheduleConfig>("/api/schedule"),
   saveSchedule: (partial: Partial<ScheduleConfig>) =>
     request<ScheduleConfig>("/api/schedule", { method: "POST", body: JSON.stringify(partial) }),
+
+  listTokens: () => request<{ tokens: ApiToken[] }>("/api/tokens"),
+  createToken: (label: string) =>
+    request<{ token: string }>("/api/tokens", { method: "POST", body: JSON.stringify({ label }) }),
+  deleteToken: (id: number) => request<{ ok: boolean }>(`/api/tokens/${id}`, { method: "DELETE" }),
 };
 
 export function prefillStreamUrl(service: "steam" | "battlenet" | "epic"): string {
