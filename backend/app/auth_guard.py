@@ -46,18 +46,55 @@ below unchanged. Deliberately excluded from /api/tokens/* itself -- token
 *management* must only ever be reachable via a real admin session (see
 routers/api_tokens.py's own docstring), otherwise a leaked read-only token
 could mint itself more tokens.
+
+Since the 4th feature round (Welle 2), three more checks live here:
+
+1. Per-token rate limiting (see services/token_rate_limit.py): a verified
+   Bearer token is now also checked against a requests/minute cap before
+   the request is let through, returning 429+Retry-After the same way the
+   login endpoint already does for repeated failed passwords. This sits
+   INSIDE the "did the token verify" branch -- an invalid token was never
+   going to be let through anyway, so there's nothing to rate-limit there.
+
+2. An IP/CIDR allowlist (see services/ip_allowlist.py) for the panel's own
+   session-cookie login and every session-authenticated request --
+   deliberately NOT applied to a verified Bearer-token request, which is
+   its own separate trust boundary (e.g. Home Assistant living on a
+   different VLAN than the admin's own browser is expected and fine). It
+   IS applied to /api/auth/* (login, setup, TOTP, Steam's OpenID
+   callback) despite that prefix's own unconditional exemption below --
+   otherwise the allowlist would block everything AFTER login but let an
+   outside IP hammer the login form itself, missing the point of an
+   access allowlist. The Steam OpenID callback is safe to include here:
+   it's Steam's own redirect landing back in the ADMIN's browser, i.e. the
+   same client IP as whoever is running the login flow, not a
+   server-to-server call from Steam's own infrastructure.
+
+3. A server-side session registry check (see
+   services/session_registry_store.py), layered on top of (not instead
+   of) the existing `request.session.get("authenticated")` check --
+   see that module's docstring for why one is needed at all (the session
+   cookie itself is a stateless signed blob with no server-side concept
+   of "this one was revoked"). A session whose id was deleted from the
+   registry (user logged it out from Settings' "active sessions" list, or
+   via /api/auth/logout) is treated exactly like `not_authenticated`, even
+   though the cookie's own signature still checks out.
 """
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from app.services import api_token_store, auth_credentials_store
+from app.services import api_token_store, app_settings_store, auth_credentials_store, ip_allowlist, session_registry_store, token_rate_limit
 
 _EXEMPT_PREFIX = "/api/auth/"
 _SETUP_EXEMPT_PATHS = {"/api/backup/restore"}
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 _TOKEN_MGMT_PREFIX = "/api/tokens"
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
 
 
 class AuthGuardMiddleware(BaseHTTPMiddleware):
@@ -67,17 +104,28 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
         if not path.startswith("/api/"):
             return await call_next(request)
 
-        if path.startswith(_EXEMPT_PREFIX):
-            return await call_next(request)
-
         if not path.startswith(_TOKEN_MGMT_PREFIX):
             auth_header = request.headers.get("authorization", "")
             if auth_header.startswith("Bearer "):
                 raw_token = auth_header.removeprefix("Bearer ").strip()
-                if raw_token and api_token_store.verify_token(raw_token):
+                token_id = api_token_store.identify_token(raw_token) if raw_token else None
+                if token_id is not None:
+                    limit = app_settings_store.get_settings()["api_token_rate_limit_per_minute"]
+                    allowed, retry_after = token_rate_limit.check(token_id, limit)
+                    if not allowed:
+                        return JSONResponse(
+                            {"detail": "rate_limited"}, status_code=429, headers={"Retry-After": str(retry_after)}
+                        )
                     if request.method not in _SAFE_METHODS:
                         return JSONResponse({"detail": "read_only"}, status_code=403)
                     return await call_next(request)
+
+        allowlist = app_settings_store.get_settings()["ip_allowlist"]
+        if not ip_allowlist.is_allowed(_client_ip(request), allowlist):
+            return JSONResponse({"detail": "ip_not_allowed"}, status_code=403)
+
+        if path.startswith(_EXEMPT_PREFIX):
+            return await call_next(request)
 
         if not auth_credentials_store.is_configured():
             if path in _SETUP_EXEMPT_PATHS:
@@ -86,6 +134,11 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
 
         if not request.session.get("authenticated"):
             return JSONResponse({"detail": "not_authenticated"}, status_code=401)
+
+        session_id = request.session.get("session_id")
+        if not session_id or not session_registry_store.exists(session_id):
+            return JSONResponse({"detail": "not_authenticated"}, status_code=401)
+        session_registry_store.touch(session_id, _client_ip(request), request.headers.get("user-agent", ""))
 
         if request.session.get("role") == "viewer" and request.method not in _SAFE_METHODS:
             return JSONResponse({"detail": "read_only"}, status_code=403)

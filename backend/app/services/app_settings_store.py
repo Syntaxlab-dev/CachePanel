@@ -76,6 +76,20 @@ _DEFAULTS = {
     # its own default "CachePanel" title, same "blank = default" contract
     # as everywhere else in this file.
     "display_party_name": "",
+    # IP/CIDR allowlist for the panel's own session-cookie login (4th
+    # feature round, Welle 2) -- see auth_guard.py. Empty list = off (same
+    # "empty = off" contract as everywhere else here), deliberately does
+    # NOT gate Bearer-token requests (see auth_guard.py's own reasoning:
+    # a token is its own, separate trust boundary, e.g. Home Assistant on
+    # a different VLAN than the admin's own browser).
+    "ip_allowlist": [],
+    # Requests/minute allowed per Bearer API token (4th feature round,
+    # Welle 2) -- see token_rate_limit.py. Unlike every other numeric
+    # field above, 0 here does NOT mean "off": it's the one setting in
+    # this file whose old, pre-Welle-2 behavior WAS unbounded, so 0 stays
+    # available as an explicit opt-out for anyone who relied on that,
+    # while new installs get a real default cap.
+    "api_token_rate_limit_per_minute": 60,
 }
 
 

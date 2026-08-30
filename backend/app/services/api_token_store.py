@@ -132,6 +132,18 @@ def delete_token(token_id: int) -> None:
         _write_all_file([t for t in tokens if t["id"] != token_id])
 
 
+def _find_by_hash(token_hash: str) -> dict | None:
+    with _lock:
+        if db.is_enabled():
+            with db.get_connection() as conn:
+                row = conn.execute(
+                    "SELECT id FROM api_tokens WHERE token_hash = %s", (token_hash,)
+                ).fetchone()
+            return {"id": row[0]} if row is not None else None
+        tokens = _read_all_file()
+    return next((t for t in tokens if t["token_hash"] == token_hash), None)
+
+
 def verify_token(raw_token: str) -> bool:
     """True if raw_token matches any currently stored (hashed) token.
     Called on every incoming request that carries a Bearer header (see
@@ -140,13 +152,16 @@ def verify_token(raw_token: str) -> bool:
     here, not a shortcut."""
     if not raw_token:
         return False
-    token_hash = _hash_token(raw_token)
-    with _lock:
-        if db.is_enabled():
-            with db.get_connection() as conn:
-                row = conn.execute(
-                    "SELECT 1 FROM api_tokens WHERE token_hash = %s", (token_hash,)
-                ).fetchone()
-            return row is not None
-        tokens = _read_all_file()
-    return any(t["token_hash"] == token_hash for t in tokens)
+    return _find_by_hash(_hash_token(raw_token)) is not None
+
+
+def identify_token(raw_token: str) -> int | None:
+    """Same lookup as verify_token(), but returns the matching token's id
+    (for per-token rate limiting, see token_rate_limit.py) instead of a
+    bare bool -- added in the 4th feature round without changing
+    verify_token()'s existing bool contract, since auth_guard.py's
+    Bearer-token path from the 3rd round already relies on that shape."""
+    if not raw_token:
+        return None
+    match = _find_by_hash(_hash_token(raw_token))
+    return match["id"] if match else None

@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation } from "react-router-dom";
-import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, ExternalLink, Heart, Home, Image, Info, KeyRound, LogIn, Palette, Send, Share2, ShieldCheck, Smartphone, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, UserCircle2, Users, type LucideIcon } from "lucide-react";
+import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, ExternalLink, Fingerprint, Gauge, Heart, Home, Image, Info, KeyRound, LogIn, MonitorSmartphone, Network, Palette, Send, Share2, ShieldCheck, Smartphone, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, UserCircle2, Users, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScheduleCard } from "@/components/ScheduleCard";
 import { InfoTooltip } from "@/components/InfoTooltip";
-import { api, type ApiToken, type AppSettings, type BackupBundle, type ExportBundle, type PanelRole, type PanelUser, type UpdateCheckResult, type VersionInfo } from "@/lib/api";
+import { api, type ApiToken, type AppSettingsResponse, type BackupBundle, type ExportBundle, type PanelRole, type PanelSession, type PanelUser, type UpdateCheckResult, type VersionInfo, type WebauthnCredential } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { ACCENTS, getStoredAccent, setAccent, type Accent } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { isUserCancelled, registerPasskey } from "@/lib/webauthn";
 
 // Six categories groups the ~18 cards below into, replacing one long
 // vertical scroll. "integrations" is admin-only content (API tokens, Home
@@ -39,6 +40,9 @@ const SETTINGS_TABS: { id: SettingsTab; icon: LucideIcon; labelKey: string; admi
 const SECTION_TAB_MAP: Record<string, SettingsTab> = {
   "section-users": "account",
   "section-2fa": "account",
+  "section-passkeys": "account",
+  "section-sessions": "account",
+  "section-ip-allowlist": "account",
   "section-notifications": "notifications",
   "section-heartbeat": "notifications",
   "section-ntfy": "notifications",
@@ -86,7 +90,7 @@ export function Settings() {
   const isAdmin = myRole === "admin";
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialSettingsTab);
   const [accent, setAccentState] = useState<Accent>(() => getStoredAccent());
-  const [values, setValues] = useState<AppSettings | null>(null);
+  const [values, setValues] = useState<AppSettingsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loginNotice, setLoginNotice] = useState<"success" | "failed" | null>(null);
@@ -120,6 +124,16 @@ export function Settings() {
   const [webpushSubscribed, setWebpushSubscribed] = useState(false);
   const [webpushBusy, setWebpushBusy] = useState(false);
   const [testingWebpush, setTestingWebpush] = useState(false);
+  const [passkeys, setPasskeys] = useState<WebauthnCredential[] | null>(null);
+  const [newPasskeyLabel, setNewPasskeyLabel] = useState("");
+  const [registeringPasskey, setRegisteringPasskey] = useState(false);
+  const [deletingPasskeyId, setDeletingPasskeyId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<PanelSession[] | null>(null);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+  const [ipAllowlistText, setIpAllowlistText] = useState("");
+  const [savingIpAllowlist, setSavingIpAllowlist] = useState(false);
+  const [tokenRateLimitInput, setTokenRateLimitInput] = useState("");
+  const [savingTokenRateLimit, setSavingTokenRateLimit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const backupFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -137,12 +151,32 @@ export function Settings() {
       .catch(() => setTokens(null));
   }
 
+  function reloadPasskeys() {
+    api
+      .webauthnListCredentials()
+      .then((data) => setPasskeys(data.credentials))
+      .catch(() => setPasskeys(null));
+  }
+
+  function reloadSessions() {
+    api
+      .listSessions()
+      .then((data) => setSessions(data.sessions))
+      .catch(() => setSessions(null));
+  }
+
   useEffect(() => {
     api
       .getSettings()
-      .then(setValues)
+      .then((data) => {
+        setValues(data);
+        setIpAllowlistText(data.ip_allowlist.join("\n"));
+        setTokenRateLimitInput(String(data.api_token_rate_limit_per_minute));
+      })
       .catch((err) => setError(err instanceof Error ? err.message : t("common.unknownError")));
     reloadUsers();
+    reloadPasskeys();
+    reloadSessions();
 
     api.getVersion().then(setVersion).catch(() => setVersion(null));
     // Single one-shot check, not a poller -- see update_check.py's docstring
@@ -338,6 +372,100 @@ export function Settings() {
     }
   }
 
+  async function handleRegisterPasskey(e: FormEvent) {
+    e.preventDefault();
+    const label = newPasskeyLabel.trim();
+    if (!label) return;
+    setRegisteringPasskey(true);
+    try {
+      await registerPasskey(label);
+      setNewPasskeyLabel("");
+      toast.success(t("settings.passkeysAddedNotice"));
+      reloadPasskeys();
+    } catch (err) {
+      if (!isUserCancelled(err)) {
+        toast.error(err instanceof Error ? err.message : t("settings.passkeysAddFailed"));
+      }
+    } finally {
+      setRegisteringPasskey(false);
+    }
+  }
+
+  async function handleDeletePasskey(credentialId: string) {
+    setDeletingPasskeyId(credentialId);
+    try {
+      await api.webauthnDeleteCredential(credentialId);
+      toast.success(t("settings.passkeysRemovedNotice"));
+      reloadPasskeys();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.passkeysRemoveFailed"));
+    } finally {
+      setDeletingPasskeyId(null);
+    }
+  }
+
+  async function handleRevokeSession(sessionId: string, isCurrent: boolean) {
+    if (isCurrent && !window.confirm(t("settings.sessionsRevokeCurrentConfirm"))) return;
+    setRevokingSessionId(sessionId);
+    try {
+      await api.revokeSession(sessionId);
+      if (isCurrent) {
+        await refreshAuth();
+      } else {
+        toast.success(t("settings.sessionsRevokedNotice"));
+        reloadSessions();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.sessionsRevokeFailed"));
+    } finally {
+      setRevokingSessionId(null);
+    }
+  }
+
+  async function handleSaveIpAllowlist(e: FormEvent) {
+    e.preventDefault();
+    const entries = ipAllowlistText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    // Warn (but don't block -- the operator may be intentionally editing
+    // this from a machine other than the one they'll access the panel
+    // from) if saving this list would exclude the browser saving it.
+    if (entries.length > 0 && values && !window.confirm(
+      entries.some((e2) => e2 === values.client_ip)
+        ? t("settings.ipAllowlistSaveConfirm")
+        : `${t("settings.ipAllowlistSelfExcludeWarning")} (${values.client_ip})\n\n${t("settings.ipAllowlistSaveConfirm")}`,
+    )) {
+      return;
+    }
+    setSavingIpAllowlist(true);
+    try {
+      const updated = await api.saveSettings({ ip_allowlist: entries });
+      setValues((prev) => (prev ? { ...prev, ...updated } : prev));
+      toast.success(t("settings.savedNotice"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("common.savingFailed"));
+    } finally {
+      setSavingIpAllowlist(false);
+    }
+  }
+
+  async function handleSaveTokenRateLimit(e: FormEvent) {
+    e.preventDefault();
+    const parsed = Number.parseInt(tokenRateLimitInput, 10);
+    if (Number.isNaN(parsed) || parsed < 0) return;
+    setSavingTokenRateLimit(true);
+    try {
+      const updated = await api.saveSettings({ api_token_rate_limit_per_minute: parsed });
+      setValues((prev) => (prev ? { ...prev, ...updated } : prev));
+      toast.success(t("settings.savedNotice"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("common.savingFailed"));
+    } finally {
+      setSavingTokenRateLimit(false);
+    }
+  }
+
   async function handleTestNtfy() {
     if (!values?.ntfy_topic) return;
     setTestingNtfy(true);
@@ -448,7 +576,7 @@ export function Settings() {
     setSaving(true);
     try {
       const updated = await api.saveSettings(values);
-      setValues(updated);
+      setValues((prev) => (prev ? { ...prev, ...updated } : prev));
       toast.success(t("settings.savedNotice"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("common.savingFailed"));
@@ -541,7 +669,7 @@ export function Settings() {
         public_display_enabled: values.public_display_enabled,
         display_party_name: values.display_party_name,
       });
-      setValues(updated);
+      setValues((prev) => (prev ? { ...prev, ...updated } : prev));
       toast.success(t("settings.publicDisplaySaved"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("common.savingFailed"));
@@ -826,6 +954,141 @@ export function Settings() {
               </Button>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      <Card id="section-passkeys">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Fingerprint className="h-4 w-4" /> {t("settings.passkeys")}
+            <InfoTooltip text={t("settings.passkeysTooltip")} />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <p className="text-xs text-[var(--muted)]">{t("settings.passkeysHint")}</p>
+
+          {passkeys === null ? (
+            <p className="text-sm text-[var(--muted)]">{t("settings.passkeysLoadFailed")}</p>
+          ) : passkeys.length === 0 ? (
+            <p className="text-sm text-[var(--muted)]">{t("settings.passkeysEmpty")}</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+              {passkeys.map((pk) => (
+                <div key={pk.credential_id} className="flex items-center justify-between px-3 py-2 text-sm">
+                  <span className="flex flex-col">
+                    <span className="font-medium">{pk.label}</span>
+                    <span className="text-xs text-[var(--muted)]">
+                      {pk.rp_id} &middot; {new Date(pk.created_date).toLocaleDateString()}
+                    </span>
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={deletingPasskeyId === pk.credential_id}
+                    onClick={() => handleDeletePasskey(pk.credential_id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> {t("settings.passkeysRemove")}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={handleRegisterPasskey} className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-end">
+            <div className="flex flex-1 flex-col gap-1.5">
+              <label htmlFor="new_passkey_label" className="text-sm font-medium">
+                {t("settings.passkeysAddLabel")}
+              </label>
+              <Input
+                id="new_passkey_label"
+                placeholder={t("settings.passkeysAddPlaceholder")}
+                value={newPasskeyLabel}
+                onChange={(e) => setNewPasskeyLabel(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" disabled={registeringPasskey}>
+              <Fingerprint className="h-4 w-4" /> {registeringPasskey ? t("settings.passkeysAdding") : t("settings.passkeysAdd")}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card id="section-sessions">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MonitorSmartphone className="h-4 w-4" /> {t("settings.sessions")}
+            <InfoTooltip text={t("settings.sessionsTooltip")} />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <p className="text-xs text-[var(--muted)]">{t("settings.sessionsHint")}</p>
+
+          {sessions === null ? (
+            <p className="text-sm text-[var(--muted)]">{t("settings.sessionsLoadFailed")}</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+              {sessions.map((s) => (
+                <div key={s.session_id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                  <span className="flex flex-col">
+                    <span className="flex items-center gap-2 font-medium">
+                      {s.client_ip}
+                      {s.is_current && (
+                        <span className="rounded-full border border-[var(--accent)] px-2 py-0.5 text-xs text-[var(--accent)]">
+                          {t("settings.sessionsCurrentBadge")}
+                        </span>
+                      )}
+                    </span>
+                    <span className="max-w-xs truncate text-xs text-[var(--muted)]" title={s.user_agent}>
+                      {s.user_agent || t("settings.sessionsUnknownDevice")}
+                    </span>
+                    <span className="text-xs text-[var(--muted)]">
+                      {t("settings.sessionsLastActivePrefix")} {new Date(s.last_seen_at).toLocaleString()}
+                    </span>
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={revokingSessionId === s.session_id}
+                    onClick={() => handleRevokeSession(s.session_id, s.is_current)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> {t("settings.sessionsRevoke")}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card id="section-ip-allowlist">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Network className="h-4 w-4" /> {t("settings.ipAllowlist")}
+            <InfoTooltip text={t("settings.ipAllowlistTooltip")} />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-xs text-[var(--muted)]">{t("settings.ipAllowlistHint")}</p>
+          {values && (
+            <p className="text-xs text-[var(--muted)]">
+              {t("settings.ipAllowlistYourIpPrefix")} <code className="font-medium text-[var(--ink)]">{values.client_ip}</code>
+            </p>
+          )}
+          <form onSubmit={handleSaveIpAllowlist} className="flex flex-col gap-3">
+            <textarea
+              value={ipAllowlistText}
+              onChange={(e) => setIpAllowlistText(e.target.value)}
+              placeholder={t("settings.ipAllowlistPlaceholder")}
+              rows={4}
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-xs text-[var(--ink)]"
+            />
+            <Button type="submit" disabled={savingIpAllowlist || isViewer} className="self-start">
+              {savingIpAllowlist ? t("settings.saving") : t("settings.save")}
+            </Button>
+          </form>
         </CardContent>
       </Card>
       </div>
@@ -1370,6 +1633,26 @@ export function Settings() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <p className="text-xs text-[var(--muted)]">{t("settings.apiTokensHint")}</p>
+
+            <form onSubmit={handleSaveTokenRateLimit} className="flex flex-col gap-1.5 border-b border-[var(--border)] pb-4 sm:flex-row sm:items-end sm:gap-3">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label htmlFor="token_rate_limit" className="flex items-center gap-1.5 text-sm font-medium">
+                  <Gauge className="h-3.5 w-3.5" /> {t("settings.apiTokensRateLimit")}
+                  <InfoTooltip text={t("settings.apiTokensRateLimitTooltip")} />
+                </label>
+                <Input
+                  id="token_rate_limit"
+                  type="number"
+                  min={0}
+                  value={tokenRateLimitInput}
+                  onChange={(e) => setTokenRateLimitInput(e.target.value)}
+                  className="max-w-[10rem]"
+                />
+              </div>
+              <Button type="submit" variant="outline" disabled={savingTokenRateLimit}>
+                {savingTokenRateLimit ? t("settings.saving") : t("settings.save")}
+              </Button>
+            </form>
 
             {justCreatedToken && (
               <div className="flex flex-col gap-2 rounded-lg border border-[var(--accent)] bg-[var(--accent-soft)] p-3">

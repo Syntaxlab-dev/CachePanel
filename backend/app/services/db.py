@@ -120,6 +120,40 @@ _SCHEMA_STATEMENTS = [
         subscription_json TEXT NOT NULL
     )
     """,
+    # WebAuthn/passkey credentials (4th feature round, Welle 2) -- see
+    # webauthn_credential_store.py. credential_id/public_key are stored
+    # base64url-encoded TEXT (not BYTEA) purely for consistency with the
+    # rest of this table's TEXT-only columns; they're opaque blobs either
+    # way, never queried by content. sign_count is the replay-detection
+    # counter from the authenticator, updated after every successful login.
+    """
+    CREATE TABLE IF NOT EXISTS webauthn_credentials (
+        credential_id TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        public_key TEXT NOT NULL,
+        sign_count BIGINT NOT NULL DEFAULT 0,
+        rp_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        created_date TEXT NOT NULL
+    )
+    """,
+    # Server-side session registry overlay (4th feature round, Welle 2) --
+    # see session_registry_store.py. Starlette's SessionMiddleware itself
+    # stays a stateless signed cookie (see main.py's comment); this table
+    # is what makes "view active logins, log out one of them" possible
+    # despite that, by letting auth_guard.py reject a cookie whose
+    # session_id was deleted here even though the cookie's own signature
+    # is still perfectly valid.
+    """
+    CREATE TABLE IF NOT EXISTS sessions (
+        session_id TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL,
+        client_ip TEXT NOT NULL,
+        user_agent TEXT NOT NULL
+    )
+    """,
 ]
 
 # Run unconditionally, after _SCHEMA_STATEMENTS, on every startup -- each

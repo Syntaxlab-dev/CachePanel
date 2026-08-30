@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.services import app_settings_store, cache_report, discord_notifier, ntfy_notifier, scheduler_service, update_check
@@ -32,6 +32,8 @@ class SettingsUpdate(BaseModel):
     auto_clean_corruption_enabled: bool | None = None
     traffic_alert_threshold_gb: float | None = None
     display_party_name: str | None = None
+    ip_allowlist: list[str] | None = None
+    api_token_rate_limit_per_minute: int | None = None
 
 
 class NotificationTestRequest(BaseModel):
@@ -43,9 +45,9 @@ class NtfyTestRequest(BaseModel):
     topic: str
 
 
-@router.get("", summary="Current app settings", description="Steam API key + SteamID64, as stored (encrypted at rest) on this instance. Never shared with anyone else.")
-def get_settings():
-    return app_settings_store.get_settings()
+@router.get("", summary="Current app settings", description="Steam API key + SteamID64, as stored (encrypted at rest) on this instance. Never shared with anyone else. Also carries the caller's own current client_ip (not a persisted setting) so the ip_allowlist editor in Settings can warn before saving a list that would exclude the very browser editing it.")
+def get_settings(request: Request):
+    return {**app_settings_store.get_settings(), "client_ip": request.client.host if request.client else ""}
 
 
 @router.post("", summary="Update app settings", description="Partial update -- only non-null fields in the body are changed.")

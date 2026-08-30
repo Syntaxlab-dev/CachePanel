@@ -58,6 +58,9 @@ export function CommandPalette() {
     const sections: PaletteEntry[] = [
       { id: "section-users", label: t("settings.users"), keywords: "users accounts roles" },
       { id: "section-2fa", label: t("settings.twoFactor"), keywords: "2fa totp two factor mfa" },
+      { id: "section-passkeys", label: t("settings.passkeys"), keywords: "passkey webauthn fido security key" },
+      { id: "section-sessions", label: t("settings.sessions"), keywords: "sessions active logins devices" },
+      { id: "section-ip-allowlist", label: t("settings.ipAllowlist"), keywords: "ip allowlist whitelist access restrict" },
       { id: "section-notifications", label: t("settings.notifications"), keywords: "discord webhook alerts" },
       { id: "section-heartbeat", label: t("settings.heartbeat"), keywords: "heartbeat uptime healthchecks" },
       { id: "section-ntfy", label: t("settings.ntfy"), keywords: "ntfy notifications" },

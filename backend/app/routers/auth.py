@@ -1,9 +1,19 @@
+import secrets
+
 import pyotp
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from app.services import app_settings_store, auth_credentials_store, login_rate_limit, steam_openid
+from app.services import (
+    app_settings_store,
+    auth_credentials_store,
+    login_rate_limit,
+    session_registry_store,
+    steam_openid,
+    webauthn_credential_store,
+    webauthn_service,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -21,10 +31,26 @@ class TotpDisableRequest(BaseModel):
     password: str
 
 
+class WebauthnRegistrationComplete(BaseModel):
+    credential: dict
+    label: str
+
+
+class WebauthnAuthenticationComplete(BaseModel):
+    credential: dict
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
 def _start_session(request: Request, username: str, role: str) -> None:
+    session_id = secrets.token_urlsafe(24)
     request.session["authenticated"] = True
     request.session["username"] = username
     request.session["role"] = role
+    request.session["session_id"] = session_id
+    session_registry_store.create(session_id, username, _client_ip(request), request.headers.get("user-agent", ""))
 
 
 @router.get("/status", summary="Panel auth status", description="Whether first-run setup is still required, and whether the current session is authenticated. Reachable without a session, unlike everything else under /api/.")
@@ -150,7 +176,163 @@ def auth_login_totp(body: TotpCode, request: Request):
 
 @router.post("/logout", summary="Panel logout")
 def auth_logout(request: Request):
+    session_id = request.session.get("session_id")
+    username = request.session.get("username")
+    if session_id and username:
+        session_registry_store.revoke(session_id, username)
     request.session.clear()
+    return {"ok": True}
+
+
+@router.get(
+    "/sessions",
+    summary="List the current account's active sessions",
+    description="Every still-registered login for the current account (not just this browser's own), newest "
+    "activity first, with `is_current` marking the one making this request.",
+)
+def list_sessions(request: Request):
+    username = request.session.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+    current_session_id = request.session.get("session_id")
+    sessions = session_registry_store.list_for_user(username)
+    return {
+        "sessions": [
+            {
+                "session_id": s["session_id"],
+                "created_at": s["created_at"],
+                "last_seen_at": s["last_seen_at"],
+                "client_ip": s["client_ip"],
+                "user_agent": s["user_agent"],
+                "is_current": s["session_id"] == current_session_id,
+            }
+            for s in sessions
+        ]
+    }
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    summary="Revoke one active session",
+    description="Logs out that specific session immediately -- its next request will be rejected even though "
+    "its session cookie is still cryptographically valid (see auth_guard.py). Scoped to the caller's own "
+    "account: cannot be used to revoke another account's session.",
+)
+def revoke_session(session_id: str, request: Request):
+    username = request.session.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+    if not session_registry_store.revoke(session_id, username):
+        raise HTTPException(status_code=404, detail="Sitzung nicht gefunden.")
+    return {"ok": True}
+
+
+@router.post(
+    "/webauthn/register/begin",
+    summary="Start registering a new passkey",
+    description="Requires an existing authenticated session (passkeys are an additional login method added "
+    "from Settings, not part of first-run setup). Returns the WebAuthn PublicKeyCredentialCreationOptions "
+    "for the browser's navigator.credentials.create() call.",
+)
+def webauthn_register_begin(request: Request):
+    username = request.session.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+    return webauthn_service.begin_registration(request, username)
+
+
+@router.post(
+    "/webauthn/register/complete",
+    summary="Finish registering a new passkey",
+    description="Verifies the browser's attestation response against the challenge from /register/begin, and "
+    "on success stores the credential under `label` for the current account.",
+)
+def webauthn_register_complete(body: WebauthnRegistrationComplete, request: Request):
+    username = request.session.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+    label = body.label.strip() or "Passkey"
+    try:
+        webauthn_service.complete_registration(request, body.credential, label)
+    except webauthn_service.WebAuthnError:
+        raise HTTPException(status_code=400, detail="Passkey konnte nicht registriert werden.")
+    return {"ok": True}
+
+
+@router.get(
+    "/webauthn/credentials",
+    summary="List the current account's registered passkeys",
+    description="label, the hostname it was registered under, and creation date only -- never the public key.",
+)
+def webauthn_list_credentials(request: Request):
+    username = request.session.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+    creds = webauthn_credential_store.list_for_user(username)
+    return {
+        "credentials": [
+            {
+                "credential_id": c["credential_id"],
+                "label": c["label"],
+                "rp_id": c["rp_id"],
+                "created_date": c["created_date"],
+            }
+            for c in creds
+        ]
+    }
+
+
+@router.delete("/webauthn/credentials/{credential_id}", summary="Remove a registered passkey")
+def webauthn_delete_credential(credential_id: str, request: Request):
+    username = request.session.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Nicht angemeldet.")
+    if not webauthn_credential_store.delete(credential_id, username):
+        raise HTTPException(status_code=404, detail="Passkey nicht gefunden.")
+    return {"ok": True}
+
+
+@router.post(
+    "/webauthn/login/begin",
+    summary="Start a passkey login",
+    description="No username needed -- the browser's own discoverable-credential picker offers a matching "
+    "passkey for this panel. Reachable while unauthenticated, like the password login endpoint.",
+)
+def webauthn_login_begin(request: Request):
+    return webauthn_service.begin_authentication(request)
+
+
+@router.post(
+    "/webauthn/login/complete",
+    summary="Finish a passkey login",
+    description="Verifies the assertion and, on success, starts a full session directly -- a passkey replaces "
+    "both the password and TOTP steps in one, since possession of it plus the device's own unlock (biometric/PIN) "
+    "is already a two-factor-equivalent proof. Shares the same per-IP rate limit as the password login path.",
+)
+def webauthn_login_complete(body: WebauthnAuthenticationComplete, request: Request):
+    client_ip = _client_ip(request)
+    locked_out, retry_after = login_rate_limit.is_locked_out(client_ip)
+    if locked_out:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Zu viele Fehlversuche. Bitte in {retry_after} Sekunden erneut versuchen.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    try:
+        username = webauthn_service.complete_authentication(request, body.credential)
+    except webauthn_service.WebAuthnError:
+        login_rate_limit.record_failure(client_ip)
+        raise HTTPException(status_code=401, detail="Passkey-Anmeldung fehlgeschlagen.")
+
+    user = auth_credentials_store.get_user(username)
+    if user is None:
+        # Credential's account was removed since it was registered -- fail closed.
+        login_rate_limit.record_failure(client_ip)
+        raise HTTPException(status_code=401, detail="Passkey-Anmeldung fehlgeschlagen.")
+
+    login_rate_limit.record_success(client_ip)
+    _start_session(request, username, user["role"])
     return {"ok": True}
 
 

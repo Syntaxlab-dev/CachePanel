@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Database, LogIn, ShieldCheck } from "lucide-react";
+import { Database, Fingerprint, LogIn, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { isPasskeySupported, isUserCancelled, loginWithPasskey } from "@/lib/webauthn";
 
 export function Login() {
   const { t } = useI18n();
@@ -16,6 +17,21 @@ export function Login() {
   const [totpCode, setTotpCode] = useState("");
   const [totpRequired, setTotpRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+
+  async function handlePasskeyLogin() {
+    setPasskeyBusy(true);
+    try {
+      await loginWithPasskey();
+      await refresh();
+    } catch (err) {
+      if (!isUserCancelled(err)) {
+        toast.error(err instanceof Error ? err.message : t("login.passkeyFailed"));
+      }
+    } finally {
+      setPasskeyBusy(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -127,6 +143,19 @@ export function Login() {
                     {submitting ? t("login.submitting") : t("login.submit")}
                   </Button>
                 </form>
+                {isPasskeySupported() && (
+                  <>
+                    <div className="my-4 flex items-center gap-3 text-xs text-[var(--muted)]">
+                      <div className="h-px flex-1 bg-[var(--border)]" />
+                      {t("login.orDivider")}
+                      <div className="h-px flex-1 bg-[var(--border)]" />
+                    </div>
+                    <Button type="button" variant="outline" className="w-full" onClick={handlePasskeyLogin} disabled={passkeyBusy}>
+                      <Fingerprint className="h-4 w-4" />
+                      {passkeyBusy ? t("login.passkeySubmitting") : t("login.passkeyLogin")}
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </>
           )}

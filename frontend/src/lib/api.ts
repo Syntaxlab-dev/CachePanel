@@ -90,6 +90,33 @@ export interface AppSettings {
   auto_clean_corruption_enabled: boolean;
   traffic_alert_threshold_gb: number;
   display_party_name: string;
+  ip_allowlist: string[];
+  api_token_rate_limit_per_minute: number;
+}
+
+// GET /api/settings only -- carries the caller's own current IP alongside
+// the persisted AppSettings fields, so the ip_allowlist editor can warn
+// before saving a list that would exclude the very browser editing it.
+// Never part of the POST /api/settings response, which only ever returns
+// what update_settings() persisted.
+export interface AppSettingsResponse extends AppSettings {
+  client_ip: string;
+}
+
+export interface WebauthnCredential {
+  credential_id: string;
+  label: string;
+  rp_id: string;
+  created_date: string;
+}
+
+export interface PanelSession {
+  session_id: string;
+  created_at: string;
+  last_seen_at: string;
+  client_ip: string;
+  user_agent: string;
+  is_current: boolean;
 }
 
 export interface ApiToken {
@@ -313,7 +340,7 @@ export const api = {
       method: "POST",
     }),
 
-  getSettings: () => request<AppSettings>("/api/settings"),
+  getSettings: () => request<AppSettingsResponse>("/api/settings"),
   saveSettings: (partial: Partial<AppSettings>) =>
     request<AppSettings>("/api/settings", { method: "POST", body: JSON.stringify(partial) }),
   testDiscordWebhook: (webhookUrl: string) =>
@@ -368,6 +395,30 @@ export const api = {
     request<{ ok: boolean }>("/api/auth/totp/confirm", { method: "POST", body: JSON.stringify({ code }) }),
   totpDisable: (password: string) =>
     request<{ ok: boolean }>("/api/auth/totp/disable", { method: "POST", body: JSON.stringify({ password }) }),
+
+  listSessions: () => request<{ sessions: PanelSession[] }>("/api/auth/sessions"),
+  revokeSession: (sessionId: string) =>
+    request<{ ok: boolean }>(`/api/auth/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),
+
+  webauthnRegisterBegin: () =>
+    request<Record<string, unknown>>("/api/auth/webauthn/register/begin", { method: "POST" }),
+  webauthnRegisterComplete: (credential: Record<string, unknown>, label: string) =>
+    request<{ ok: boolean }>("/api/auth/webauthn/register/complete", {
+      method: "POST",
+      body: JSON.stringify({ credential, label }),
+    }),
+  webauthnListCredentials: () => request<{ credentials: WebauthnCredential[] }>("/api/auth/webauthn/credentials"),
+  webauthnDeleteCredential: (credentialId: string) =>
+    request<{ ok: boolean }>(`/api/auth/webauthn/credentials/${encodeURIComponent(credentialId)}`, {
+      method: "DELETE",
+    }),
+  webauthnLoginBegin: () =>
+    request<Record<string, unknown>>("/api/auth/webauthn/login/begin", { method: "POST" }),
+  webauthnLoginComplete: (credential: Record<string, unknown>) =>
+    request<{ ok: boolean }>("/api/auth/webauthn/login/complete", {
+      method: "POST",
+      body: JSON.stringify({ credential }),
+    }),
 
   listUsers: () => request<{ users: PanelUser[] }>("/api/users"),
   addUser: (username: string, password: string, role: PanelRole) =>
