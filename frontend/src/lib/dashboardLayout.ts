@@ -3,6 +3,7 @@
 // server round-trip" contract as theme.ts's dark mode / accent color.
 
 export type WidgetId =
+  | "setupChecklist"
   | "systemStatus"
   | "diagnostics"
   | "cacheIntegrity"
@@ -20,6 +21,7 @@ export type WidgetId =
 // a returning user's stored layout must neither crash nor silently drop
 // the new widget forever.
 export const DEFAULT_WIDGET_ORDER: WidgetId[] = [
+  "setupChecklist",
   "systemStatus",
   "diagnostics",
   "cacheIntegrity",

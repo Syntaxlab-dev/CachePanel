@@ -29,15 +29,15 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   function goToSettingsSection(sectionId: string) {
-    navigate("/settings");
-    // The target section only exists once Settings.tsx has actually
-    // mounted after the route change above, which isn't synchronous with
-    // this call -- a short delay is simpler and just as reliable here as
-    // threading a "scroll to this id next" ref through route state for
-    // what's a one-off convenience jump.
-    window.setTimeout(() => {
-      document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 60);
+    // Settings.tsx's own hash effect does the work now (activates the
+    // right category tab, THEN scrolls) -- since its cards moved into
+    // per-tab containers, a section outside the active tab isn't visible
+    // for getElementById()/scrollIntoView() to find, so this can no longer
+    // just navigate and blindly scroll itself. Navigating with the hash
+    // also correctly re-triggers that effect if we're already on
+    // /settings looking at a different tab (React Router's useLocation()
+    // updates on a hash-only change, unlike a plain window.location write).
+    navigate(`/settings#${sectionId}`);
   }
 
   const entries: PaletteEntry[] = useMemo(() => {

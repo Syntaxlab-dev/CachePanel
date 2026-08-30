@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import {
   AlertCircle,
   AlertTriangle,
@@ -6,6 +7,7 @@ import {
   ArrowDownCircle,
   ArrowUp,
   CheckCircle2,
+  Circle,
   Download,
   Eye,
   EyeOff,
@@ -13,6 +15,8 @@ import {
   HardDrive,
   HelpCircle,
   History,
+  Image as ImageIcon,
+  ListChecks,
   Pause,
   Pencil,
   Play,
@@ -34,8 +38,10 @@ import { Input } from "@/components/ui/input";
 import { TrafficChart } from "@/components/TrafficChart";
 import { TrendsChart } from "@/components/TrendsChart";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
+import { InfoTooltip } from "@/components/InfoTooltip";
 import {
   api,
+  type AppSettings,
   type CacheForecast,
   type CacheScanResult,
   type DailyStat,
@@ -44,6 +50,7 @@ import {
   type HealthStatus,
   type LiveTickerEntry,
   type RunHistoryEntry,
+  type ScheduleConfig,
   type TrafficWindow,
 } from "@/lib/api";
 import { formatBytes, formatDaysApprox, formatPercent, formatUptime, cn } from "@/lib/utils";
@@ -75,7 +82,7 @@ const SERVICE_LABEL: Record<string, string> = {
 
 export function Dashboard() {
   const { t, lang } = useI18n();
-  const { role } = useAuth();
+  const { role, totpEnabled } = useAuth();
   const isViewer = role === "viewer";
   const locale = lang === "de" ? "de-DE" : "en-US";
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -100,6 +107,9 @@ export function Dashboard() {
   const [editingClientIp, setEditingClientIp] = useState<string | null>(null);
   const [clientLabelDraft, setClientLabelDraft] = useState("");
   const [savingClientLabel, setSavingClientLabel] = useState(false);
+  const [checklistSettings, setChecklistSettings] = useState<AppSettings | null>(null);
+  const [checklistSchedule, setChecklistSchedule] = useState<ScheduleConfig | null>(null);
+  const [checklistWebpush, setChecklistWebpush] = useState(false);
 
   const loadAll = useCallback(
     (window: TrafficWindow) => {
@@ -130,6 +140,23 @@ export function Dashboard() {
       .clientLabels()
       .then((data) => setClientLabels(data.labels))
       .catch(() => setClientLabels({}));
+  }, []);
+
+  // Feeds the "setup checklist" widget below -- pure client-side
+  // evaluation of settings/schedule the app already has endpoints for, no
+  // new backend endpoint needed for this. Web push is the one item that
+  // can't be read from AppSettings (it's a per-browser Push API
+  // subscription, not a server-side setting -- see Settings.tsx's
+  // identical check), so it gets its own small navigator call here too.
+  useEffect(() => {
+    api.getSettings().then(setChecklistSettings).catch(() => setChecklistSettings(null));
+    api.getSchedule().then(setChecklistSchedule).catch(() => setChecklistSchedule(null));
+    if ("serviceWorker" in navigator && "PushManager" in window) {
+      navigator.serviceWorker.ready
+        .then((registration) => registration.pushManager.getSubscription())
+        .then((sub) => setChecklistWebpush(!!sub))
+        .catch(() => setChecklistWebpush(false));
+    }
   }, []);
 
   // Own, faster poll cadence than the main dashboard refresh (which the
@@ -313,6 +340,67 @@ export function Dashboard() {
     downloadCsv(`cachepanel-stats-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   }
 
+  // Draws a small shareable snapshot card straight onto a <canvas> (title,
+  // the 3 headline numbers, a timestamp) and offers it as a PNG download --
+  // deliberately no html2canvas/similar dependency for this, drawing a
+  // handful of text/rect primitives ourselves is simple enough that adding
+  // a library just to rasterize a fixed, known layout would be the wrong
+  // trade (same reasoning CommandPalette.tsx's plain substring filter --
+  // instead of a fuzzy-match library -- already applies in this project).
+  // Fixed dark colors rather than the viewer's current CSS theme vars, so
+  // an exported/shared image looks the same regardless of who generated it
+  // -- same idea as PublicDisplay.tsx's own fixed palette.
+  function handleExportImage() {
+    if (!stats) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 450;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.fillStyle = "#0a0d13";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "#f1f5f9";
+    ctx.font = "600 28px system-ui, sans-serif";
+    ctx.fillText("CachePanel", 40, 60);
+
+    const statBoxes: { label: string; value: string }[] = [
+      { label: t("dashboard.stat.hitRatio"), value: formatPercent(stats.overall.hit_ratio) },
+      { label: t("dashboard.stat.fromCache"), value: formatBytes(stats.overall.hit_bytes) },
+      { label: t("dashboard.stat.totalRequests"), value: stats.overall.total_requests.toLocaleString(locale) },
+    ];
+    const boxWidth = (canvas.width - 40 * 2 - 24 * 2) / 3;
+    statBoxes.forEach((box, i) => {
+      const x = 40 + i * (boxWidth + 24);
+      const y = 110;
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, boxWidth, 140);
+      ctx.fillStyle = "#7dd3fc";
+      ctx.font = "600 32px system-ui, sans-serif";
+      ctx.fillText(box.value, x + 20, y + 70);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "13px system-ui, sans-serif";
+      ctx.fillText(box.label.toUpperCase(), x + 20, y + 100);
+    });
+
+    ctx.fillStyle = "#64748b";
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillText(new Date().toLocaleString(locale), 40, canvas.height - 30);
+    ctx.fillText("github.com/Syntaxlab-dev/CachePanel", 40, canvas.height - 12);
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cachepanel-snapshot-${new Date().toISOString().slice(0, 10)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }, "image/png");
+  }
+
   // Search matches the service's display label (e.g. "Battle.net") or its
   // status text (localized "erfolgreich" / "Exit-Code 1") -- covers the two
   // things a search over a short run-history list is actually useful for,
@@ -349,6 +437,76 @@ export function Dashboard() {
   // used, just centralized so the render loop below can treat every
   // widget uniformly (present in layout.order + widgetDefs = renderable).
   const widgetDefs: Partial<Record<WidgetId, { title: string; node: ReactNode }>> = {};
+
+  // Only rendered once both fetches (see the effect above) have actually
+  // resolved -- showing every item as "not done" for a moment while still
+  // loading would be a false, mildly alarming flash, not just a cosmetic
+  // nit.
+  if (checklistSettings && checklistSchedule) {
+    const checklistItems: { done: boolean; label: string; to: string }[] = [
+      {
+        done: Boolean(checklistSettings.steam_api_key && checklistSettings.steam_id64),
+        label: t("dashboard.checklist.steam"),
+        to: "/settings#section-users",
+      },
+      {
+        done:
+          checklistSchedule.steam.enabled || checklistSchedule.battlenet.enabled || checklistSchedule.epic.enabled,
+        label: t("dashboard.checklist.schedule"),
+        to: "/settings#section-users",
+      },
+      {
+        done: checklistSettings.auto_backup_enabled,
+        label: t("dashboard.checklist.backup"),
+        to: "/settings#section-autobackup",
+      },
+      {
+        done: Boolean(checklistSettings.discord_webhook_url || checklistSettings.ntfy_topic || checklistWebpush),
+        label: t("dashboard.checklist.notifications"),
+        to: "/settings#section-notifications",
+      },
+      {
+        done: totpEnabled,
+        label: t("dashboard.checklist.twoFactor"),
+        to: "/settings#section-2fa",
+      },
+    ];
+    const doneCount = checklistItems.filter((i) => i.done).length;
+
+    widgetDefs.setupChecklist = {
+      title: t("dashboard.checklist"),
+      node: (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <ListChecks className="h-4 w-4" /> {t("dashboard.checklist")}
+            </CardTitle>
+            <span className="text-xs text-[var(--muted)]">
+              {doneCount} {t("dashboard.checklist.of")} {checklistItems.length}
+            </span>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-1">
+            {checklistItems.map((item) => (
+              <Link
+                key={item.label}
+                to={item.to}
+                className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-[var(--surface-2)]"
+              >
+                {item.done ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--ok)]" />
+                ) : (
+                  <Circle className="h-4 w-4 shrink-0 text-[var(--muted)]" />
+                )}
+                <span className={item.done ? "text-[var(--muted)] line-through" : "text-[var(--ink)]"}>
+                  {item.label}
+                </span>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      ),
+    };
+  }
 
   if (health) {
     widgetDefs.systemStatus = {
@@ -477,6 +635,7 @@ export function Dashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <HardDrive className="h-4 w-4" /> {t("dashboard.cacheForecast")}
+              <InfoTooltip text={t("dashboard.cacheForecastTooltip")} />
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -556,6 +715,7 @@ export function Dashboard() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" /> {t("dashboard.trends")}
+              <InfoTooltip text={t("dashboard.trendsTooltip")} />
             </CardTitle>
             <div className="flex gap-1">
               {TRENDS_RANGES.map((r) => (
@@ -843,6 +1003,9 @@ export function Dashboard() {
           <Button variant="outline" size="sm" onClick={handleExportCsv} title={t("dashboard.exportCsv")}>
             <Download className="h-3.5 w-3.5" /> {t("dashboard.exportCsv")}
           </Button>
+          <Button variant="outline" size="sm" onClick={handleExportImage} title={t("dashboard.exportImage")}>
+            <ImageIcon className="h-3.5 w-3.5" /> {t("dashboard.exportImage")}
+          </Button>
           {customizing && (
             <Button variant="outline" size="sm" onClick={handleResetLayout}>
               {t("dashboard.customize.reset")}
@@ -862,6 +1025,7 @@ export function Dashboard() {
           icon={<Gauge className="h-4 w-4" />}
           label={t("dashboard.stat.hitRatio")}
           value={formatPercent(overall.hit_ratio)}
+          tooltip={t("dashboard.stat.hitRatioTooltip")}
         />
         <StatCard
           icon={<CheckCircle2 className="h-4 w-4" />}
@@ -989,7 +1153,17 @@ function DashboardWidget({
   );
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function StatCard({
+  icon,
+  label,
+  value,
+  tooltip,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tooltip?: string;
+}) {
   return (
     <Card>
       <CardContent className="flex items-center gap-4 p-5">
@@ -997,7 +1171,9 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
           {icon}
         </div>
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{label}</p>
+          <p className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+            {label} {tooltip && <InfoTooltip text={tooltip} />}
+          </p>
           <p className="text-xl font-semibold tabular-nums">{value}</p>
         </div>
       </CardContent>

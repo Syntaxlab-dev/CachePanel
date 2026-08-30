@@ -1,15 +1,59 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, ExternalLink, Heart, Home, Image, Info, KeyRound, LogIn, Palette, Send, Share2, ShieldCheck, Smartphone, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, ExternalLink, Heart, Home, Image, Info, KeyRound, LogIn, Palette, Send, Share2, ShieldCheck, Smartphone, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, UserCircle2, Users, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScheduleCard } from "@/components/ScheduleCard";
+import { InfoTooltip } from "@/components/InfoTooltip";
 import { api, type ApiToken, type AppSettings, type BackupBundle, type ExportBundle, type PanelRole, type PanelUser, type UpdateCheckResult, type VersionInfo } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { ACCENTS, getStoredAccent, setAccent, type Accent } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+
+// Six categories groups the ~18 cards below into, replacing one long
+// vertical scroll. "integrations" is admin-only content (API tokens, Home
+// Assistant), so its tab is filtered out entirely for a viewer rather than
+// showing an empty tab -- see SETTINGS_TABS below.
+type SettingsTab = "account" | "steam" | "notifications" | "automation" | "integrations" | "appearance";
+
+const SETTINGS_TABS: { id: SettingsTab; icon: LucideIcon; labelKey: string; adminOnly?: boolean }[] = [
+  { id: "account", icon: UserCircle2, labelKey: "settings.tab.account" },
+  { id: "steam", icon: KeyRound, labelKey: "settings.tab.steam" },
+  { id: "notifications", icon: Bell, labelKey: "settings.tab.notifications" },
+  { id: "automation", icon: Archive, labelKey: "settings.tab.automation" },
+  { id: "integrations", icon: Terminal, labelKey: "settings.tab.integrations", adminOnly: true },
+  { id: "appearance", icon: Palette, labelKey: "settings.tab.appearance" },
+];
+
+// CommandPalette.tsx jumps here via `/settings#section-xyz` (see its
+// goToSettingsSection()) rather than the old direct getElementById() call
+// it used to make right after navigating -- that broke the moment cards
+// moved into per-tab containers, since a section that isn't in the
+// currently active tab was never in a state document.getElementById()
+// could find it correctly-visible in. This map lets Settings.tsx's own
+// hash effect below activate the right tab FIRST, then scroll -- every
+// card keeps every #section-* id it already had, nothing renamed.
+const SECTION_TAB_MAP: Record<string, SettingsTab> = {
+  "section-users": "account",
+  "section-2fa": "account",
+  "section-notifications": "notifications",
+  "section-heartbeat": "notifications",
+  "section-ntfy": "notifications",
+  "section-webpush": "notifications",
+  "section-autobackup": "automation",
+  "section-autocleanup": "automation",
+  "section-api-tokens": "integrations",
+  "section-home-assistant": "integrations",
+  "section-display": "appearance",
+};
+
+function initialSettingsTab(): SettingsTab {
+  const hash = window.location.hash.replace(/^#/, "");
+  return SECTION_TAB_MAP[hash] ?? "account";
+}
 
 // PushManager.subscribe()'s applicationServerKey wants a Uint8Array, but
 // the backend hands back the VAPID public key as base64url text (see
@@ -36,9 +80,11 @@ function urlBase64ToUint8Array(base64Url: string): Uint8Array<ArrayBuffer> {
 
 export function Settings() {
   const { t } = useI18n();
+  const location = useLocation();
   const { role: myRole, totpEnabled, refresh: refreshAuth } = useAuth();
   const isViewer = myRole === "viewer";
   const isAdmin = myRole === "admin";
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialSettingsTab);
   const [accent, setAccentState] = useState<Accent>(() => getStoredAccent());
   const [values, setValues] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +198,24 @@ export function Settings() {
       .then((sub) => setWebpushSubscribed(!!sub))
       .catch(() => setWebpushSubscribed(false));
   }, []);
+
+  // Activates the right tab for a #section-xyz deep link (e.g. from
+  // CommandPalette.tsx or a bookmarked URL) BEFORE scrolling to it -- the
+  // element only exists in a visible (non `hidden`) part of the DOM once
+  // its tab is active, see SECTION_TAB_MAP above. Depends on
+  // location.hash (not just running once on mount) so clicking a
+  // different section from the palette while already on /settings, which
+  // only changes the hash, still re-triggers this.
+  useEffect(() => {
+    const hash = location.hash.replace(/^#/, "");
+    if (!hash) return;
+    const tab = SECTION_TAB_MAP[hash];
+    if (tab) setActiveTab(tab);
+    const timeoutId = window.setTimeout(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+    return () => window.clearTimeout(timeoutId);
+  }, [location.hash]);
 
   async function handleWebpushSubscribe() {
     setWebpushBusy(true);
@@ -567,33 +631,58 @@ export function Settings() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Palette className="h-4 w-4" /> {t("settings.appearance")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-3 text-sm font-medium">{t("settings.appearanceAccent")}</p>
-          <div className="flex items-center gap-2">
-            {ACCENTS.map((a) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => handleAccentChange(a)}
-                aria-label={t(`accent.${a}` as const)}
-                title={t(`accent.${a}` as const)}
-                className={cn(
-                  "h-8 w-8 rounded-full border-2 transition-transform",
-                  accent === a ? "scale-110 border-[var(--ink)]" : "border-transparent hover:scale-105",
-                )}
-                style={{ background: `var(--accent-swatch-${a})` }}
-              />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex gap-1 overflow-x-auto border-b border-[var(--border)] pb-px">
+        {SETTINGS_TABS.filter((tab) => !tab.adminOnly || isAdmin).map((tab) => {
+          const TabIcon = tab.icon;
+          const active = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                active
+                  ? "border-[var(--accent)] text-[var(--accent)]"
+                  : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]",
+              )}
+            >
+              <TabIcon className="h-4 w-4" /> {t(tab.labelKey as Parameters<typeof t>[0])}
+            </button>
+          );
+        })}
+      </div>
 
+      <div className={cn("flex flex-col gap-6", activeTab !== "appearance" && "hidden")}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Palette className="h-4 w-4" /> {t("settings.appearance")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-sm font-medium">{t("settings.appearanceAccent")}</p>
+            <div className="flex items-center gap-2">
+              {ACCENTS.map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => handleAccentChange(a)}
+                  aria-label={t(`accent.${a}` as const)}
+                  title={t(`accent.${a}` as const)}
+                  className={cn(
+                    "h-8 w-8 rounded-full border-2 transition-transform",
+                    accent === a ? "scale-110 border-[var(--ink)]" : "border-transparent hover:scale-105",
+                  )}
+                  style={{ background: `var(--accent-swatch-${a})` }}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className={cn("flex flex-col gap-6", activeTab !== "account" && "hidden")}>
       <Card id="section-users">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -739,7 +828,9 @@ export function Settings() {
           )}
         </CardContent>
       </Card>
+      </div>
 
+      <div className={cn("flex flex-col gap-6", activeTab !== "steam" && "hidden")}>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -857,7 +948,9 @@ export function Settings() {
           )}
         </CardContent>
       </Card>
+      </div>
 
+      <div className={cn("flex flex-col gap-6", activeTab !== "notifications" && "hidden")}>
       <Card id="section-notifications">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1153,7 +1246,9 @@ export function Settings() {
           )}
         </CardContent>
       </Card>
+      </div>
 
+      <div className={cn("flex flex-col gap-6", activeTab !== "automation" && "hidden")}>
       <Card id="section-autobackup">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1235,6 +1330,7 @@ export function Settings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trash2 className="h-4 w-4" /> {t("settings.autoCleanup")}
+            <InfoTooltip text={t("settings.autoCleanupTooltip")} />
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -1261,12 +1357,15 @@ export function Settings() {
           )}
         </CardContent>
       </Card>
+      </div>
 
+      <div className={cn("flex flex-col gap-6", activeTab !== "integrations" && "hidden")}>
       {isAdmin && (
         <Card id="section-api-tokens">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Terminal className="h-4 w-4" /> {t("settings.apiTokens")}
+              <InfoTooltip text={t("settings.apiTokensTooltip")} />
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -1356,7 +1455,9 @@ export function Settings() {
           </CardContent>
         </Card>
       )}
+      </div>
 
+      <div className={cn("flex flex-col gap-6", activeTab !== "steam" && "hidden")}>
       <ScheduleCard />
 
       <Card>
@@ -1413,7 +1514,9 @@ export function Settings() {
           </CardContent>
         </Card>
       )}
+      </div>
 
+      <div className={cn("flex flex-col gap-6", activeTab !== "automation" && "hidden")}>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1439,7 +1542,9 @@ export function Settings() {
           </div>
         </CardContent>
       </Card>
+      </div>
 
+      <div className={cn("flex flex-col gap-6", activeTab !== "appearance" && "hidden")}>
       <Card id="section-display">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1523,6 +1628,7 @@ export function Settings() {
           </a>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

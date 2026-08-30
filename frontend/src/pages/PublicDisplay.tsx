@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Database, Gauge, HardDrive, Server, Sparkles, Trophy } from "lucide-react";
 import { TrafficChart } from "@/components/TrafficChart";
+import { InfoTooltip } from "@/components/InfoTooltip";
 import { fetchPublicDisplayData, type PublicDisplayData } from "@/lib/api";
 import { formatBytes, formatDaysApprox, formatPercent } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -204,6 +205,7 @@ export function PublicDisplay() {
       <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-slate-500">
           <Trophy className="h-4 w-4" /> {t("display.records")}
+          <InfoTooltip text={t("display.recordsTooltip")} />
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>

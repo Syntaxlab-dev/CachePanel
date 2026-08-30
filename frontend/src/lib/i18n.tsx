@@ -22,6 +22,12 @@ const dictionaries = {
     "dashboard.title": "Dashboard",
     "dashboard.subtitle": "Überblick über deinen LanCache",
     "dashboard.stat.hitRatio": "Trefferquote",
+    "dashboard.stat.hitRatioTooltip":
+      "Anteil der Anfragen, die direkt aus dem Cache bedient wurden statt neu heruntergeladen zu werden.",
+    "dashboard.cacheForecastTooltip":
+      "Schätzung auf Basis der zuletzt gecachten Daten und der aktuellen Speicherauslastung — keine exakte Vorhersage, nur ein grober Anhaltspunkt.",
+    "dashboard.trendsTooltip":
+      "Sammelt ab dem Tag, an dem dieses Feature installiert wurde — keine rückwirkende Historie für ältere Tage.",
     "dashboard.stat.fromCache": "Aus Cache bedient",
     "dashboard.stat.newlyDownloaded": "Neu heruntergeladen",
     "dashboard.stat.totalRequests": "Anfragen gesamt",
@@ -32,6 +38,7 @@ const dictionaries = {
     "dashboard.runHistorySearchPlaceholder": "Verlauf durchsuchen…",
     "dashboard.runHistoryNoMatch": "Keine Einträge gefunden.",
     "dashboard.exportCsv": "CSV exportieren",
+    "dashboard.exportImage": "Als Bild exportieren",
     "dashboard.trafficTimeline": "Traffic-Verlauf",
     "dashboard.trafficWindow.24h": "24h",
     "dashboard.trafficWindow.7d": "7 Tage",
@@ -86,6 +93,7 @@ const dictionaries = {
     "display.poweredBy": "Läuft mit",
     "display.unavailable": "Diese Anzeige ist derzeit nicht aktiv.",
     "display.records": "Rekorde",
+    "display.recordsTooltip": "Gilt nur ab dem Tag, an dem CachePanel angefangen hat, das zu messen — keine rückwirkende Historie.",
     "display.recordBandwidth": "Meiste an einem Tag gesparte Bandbreite",
     "display.recordHitRatio": "Höchste Trefferquote an einem Tag",
     "display.recordsNotYet": "Noch keine Rekorde — komm morgen wieder.",
@@ -155,6 +163,12 @@ const dictionaries = {
     "settings.title": "Einstellungen",
     "settings.subtitle":
       "Deine Zugangsdaten bleiben ausschließlich auf diesem Server gespeichert — sie werden nirgendwo sonst hinterlegt oder geteilt.",
+    "settings.tab.account": "Konto & Sicherheit",
+    "settings.tab.steam": "Steam & Zeitplan",
+    "settings.tab.notifications": "Benachrichtigungen",
+    "settings.tab.automation": "Automatisierung & Backup",
+    "settings.tab.integrations": "Integrationen",
+    "settings.tab.appearance": "Darstellung & Sonstiges",
     "settings.steamCard": "Steam",
     "settings.steamLogin": "Mit Steam anmelden",
     "settings.save": "Speichern",
@@ -402,12 +416,15 @@ const dictionaries = {
     "settings.autoCleanup": "Automatische Bereinigung",
     "settings.autoCleanupEnabled": "Beschädigte Cache-Dateien automatisch bereinigen",
     "settings.autoCleanupHint": "Prüft regelmäßig auf 0-Byte-Dateien (dieselbe Erkennung wie der manuelle Scan im Dashboard) und entfernt sie automatisch, sobald welche gefunden werden. Standardmäßig deaktiviert.",
+    "settings.autoCleanupTooltip":
+      "Löscht ausschließlich 0-Byte-Dateien — dieselbe konservative Erkennung wie der manuelle Scan, keine aggressivere automatische Logik.",
 
     "settings.trafficAlertLabel": "Traffic-Schwellenwert-Alarm (GB / 24h)",
     "settings.trafficAlertHint": "Benachrichtigt, sobald ein einzelner Dienst in den letzten ~24h mehr als diese Menge übertragen hat. 0 = deaktiviert.",
 
     "settings.apiTokens": "API-Tokens",
     "settings.apiTokensHint": "Nur-Lese-Zugriff für Drittsysteme (z. B. Home Assistant, eigene Skripte) per Bearer-Token statt Panel-Login. Der Token wird nur einmal bei der Erstellung angezeigt.",
+    "settings.apiTokensTooltip": "API-Tokens sind für immer nur lesend — sie können weder Einstellungen ändern noch Aktionen wie Prefill oder Cache-Leeren auslösen.",
     "settings.apiTokensCreatedPrefix": "Erstellt am",
     "settings.apiTokensNameLabel": "Name",
     "settings.apiTokensNamePlaceholder": "z. B. Home Assistant",
@@ -464,6 +481,14 @@ const dictionaries = {
     "dashboard.clientLabelCancel": "Abbrechen",
     "dashboard.clientLabelSaveFailed": "Speichern fehlgeschlagen",
 
+    "dashboard.checklist": "Einrichtungs-Fortschritt",
+    "dashboard.checklist.of": "von",
+    "dashboard.checklist.steam": "Steam-Zugangsdaten eingetragen",
+    "dashboard.checklist.schedule": "Zeitplan für mindestens einen Dienst aktiv",
+    "dashboard.checklist.backup": "Automatische Backups aktiviert",
+    "dashboard.checklist.notifications": "Mindestens ein Benachrichtigungskanal eingerichtet",
+    "dashboard.checklist.twoFactor": "Zwei-Faktor-Authentifizierung aktiv",
+
     "dashboard.liveTicker": "Live-Aktivität",
     "dashboard.liveTickerEmpty": "Noch keine Anfragen aufgezeichnet.",
     "dashboard.liveTicker.hit": "Treffer",
@@ -497,6 +522,12 @@ const dictionaries = {
     "dashboard.title": "Dashboard",
     "dashboard.subtitle": "Overview of your LanCache",
     "dashboard.stat.hitRatio": "Hit ratio",
+    "dashboard.stat.hitRatioTooltip":
+      "Share of requests served directly from the cache instead of being downloaded again.",
+    "dashboard.cacheForecastTooltip":
+      "An estimate based on recent caching activity and current disk usage — not an exact prediction, just a rough guide.",
+    "dashboard.trendsTooltip":
+      "Collects data from the day this feature was installed onward — no backfilled history for earlier days.",
     "dashboard.stat.fromCache": "Served from cache",
     "dashboard.stat.newlyDownloaded": "Newly downloaded",
     "dashboard.stat.totalRequests": "Total requests",
@@ -507,6 +538,7 @@ const dictionaries = {
     "dashboard.runHistorySearchPlaceholder": "Search history…",
     "dashboard.runHistoryNoMatch": "No matching entries.",
     "dashboard.exportCsv": "Export CSV",
+    "dashboard.exportImage": "Export as image",
     "dashboard.trafficTimeline": "Traffic timeline",
     "dashboard.trafficWindow.24h": "24h",
     "dashboard.trafficWindow.7d": "7 days",
@@ -562,6 +594,7 @@ const dictionaries = {
     "display.poweredBy": "Powered by",
     "display.unavailable": "This display is not currently active.",
     "display.records": "Records",
+    "display.recordsTooltip": "Only counts from the day CachePanel started measuring this -- no backfilled history.",
     "display.recordBandwidth": "Most bandwidth saved in a day",
     "display.recordHitRatio": "Highest hit ratio in a day",
     "display.recordsNotYet": "No records yet — check back tomorrow.",
@@ -630,6 +663,12 @@ const dictionaries = {
     "settings.title": "Settings",
     "settings.subtitle":
       "Your credentials are stored exclusively on this server — never shared or stored anywhere else.",
+    "settings.tab.account": "Account & Security",
+    "settings.tab.steam": "Steam & Schedule",
+    "settings.tab.notifications": "Notifications",
+    "settings.tab.automation": "Automation & Backup",
+    "settings.tab.integrations": "Integrations",
+    "settings.tab.appearance": "Appearance & More",
     "settings.steamCard": "Steam",
     "settings.steamLogin": "Sign in with Steam",
     "settings.save": "Save",
@@ -877,12 +916,15 @@ const dictionaries = {
     "settings.autoCleanup": "Automatic cleanup",
     "settings.autoCleanupEnabled": "Automatically clean up corrupted cache files",
     "settings.autoCleanupHint": "Periodically checks for 0-byte files (same detection as the manual scan on the dashboard) and removes them automatically as soon as any are found. Off by default.",
+    "settings.autoCleanupTooltip":
+      "Only ever deletes 0-byte files -- the same conservative detection as the manual scan, no more aggressive automatic logic.",
 
     "settings.trafficAlertLabel": "Traffic alert threshold (GB / 24h)",
     "settings.trafficAlertHint": "Notifies once a single service has transferred more than this amount in roughly the last 24h. 0 = disabled.",
 
     "settings.apiTokens": "API tokens",
     "settings.apiTokensHint": "Read-only access for third-party systems (e.g. Home Assistant, your own scripts) via a Bearer token instead of a panel login. The token is only ever shown once, right after creation.",
+    "settings.apiTokensTooltip": "API tokens are read-only forever -- they can't change settings or trigger actions like prefill or clearing the cache.",
     "settings.apiTokensCreatedPrefix": "Created",
     "settings.apiTokensNameLabel": "Name",
     "settings.apiTokensNamePlaceholder": "e.g. Home Assistant",
@@ -938,6 +980,14 @@ const dictionaries = {
     "dashboard.clientLabelSave": "Save",
     "dashboard.clientLabelCancel": "Cancel",
     "dashboard.clientLabelSaveFailed": "Save failed",
+
+    "dashboard.checklist": "Setup progress",
+    "dashboard.checklist.of": "of",
+    "dashboard.checklist.steam": "Steam credentials entered",
+    "dashboard.checklist.schedule": "Schedule active for at least one service",
+    "dashboard.checklist.backup": "Automatic backups enabled",
+    "dashboard.checklist.notifications": "At least one notification channel set up",
+    "dashboard.checklist.twoFactor": "Two-factor authentication active",
 
     "dashboard.liveTicker": "Live activity",
     "dashboard.liveTickerEmpty": "No requests recorded yet.",
