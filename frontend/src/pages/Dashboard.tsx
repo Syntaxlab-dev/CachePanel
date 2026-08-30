@@ -14,7 +14,9 @@ import {
   HelpCircle,
   History,
   Pause,
+  Pencil,
   Play,
+  Radio,
   ScanSearch,
   Search,
   Server,
@@ -27,6 +29,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { TrafficChart } from "@/components/TrafficChart";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 import {
@@ -36,11 +39,13 @@ import {
   type DashboardStats,
   type DiagnosticCheck,
   type HealthStatus,
+  type LiveTickerEntry,
   type RunHistoryEntry,
   type TrafficWindow,
 } from "@/lib/api";
 import { formatBytes, formatDaysApprox, formatPercent, formatUptime, cn } from "@/lib/utils";
 import { downloadCsv } from "@/lib/csv";
+import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { getStoredLayout, saveLayout, resetLayout, type DashboardLayout, type WidgetId } from "@/lib/dashboardLayout";
 import { setDiagnosticsBadge, clearDiagnosticsBadge } from "@/lib/diagnosticsBadge";
@@ -65,6 +70,8 @@ const SERVICE_LABEL: Record<string, string> = {
 
 export function Dashboard() {
   const { t, lang } = useI18n();
+  const { role } = useAuth();
+  const isViewer = role === "viewer";
   const locale = lang === "de" ? "de-DE" : "en-US";
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +88,11 @@ export function Dashboard() {
   const [trafficWindow, setTrafficWindow] = useState<TrafficWindow>("24h");
   const [autoRefresh, setAutoRefresh] = useState(() => getStoredAutoRefresh());
   const [historySearch, setHistorySearch] = useState("");
+  const [liveTicker, setLiveTicker] = useState<LiveTickerEntry[] | null>(null);
+  const [clientLabels, setClientLabels] = useState<Record<string, string>>({});
+  const [editingClientIp, setEditingClientIp] = useState<string | null>(null);
+  const [clientLabelDraft, setClientLabelDraft] = useState("");
+  const [savingClientLabel, setSavingClientLabel] = useState(false);
 
   const loadAll = useCallback(
     (window: TrafficWindow) => {
@@ -105,6 +117,31 @@ export function Dashboard() {
   useEffect(() => {
     loadAll(trafficWindow);
   }, [trafficWindow, loadAll]);
+
+  useEffect(() => {
+    api
+      .clientLabels()
+      .then((data) => setClientLabels(data.labels))
+      .catch(() => setClientLabels({}));
+  }, []);
+
+  // Own, faster poll cadence than the main dashboard refresh (which the
+  // user can even leave paused) -- the live ticker is only useful if it
+  // actually stays current. Independent of `customizing`/`autoRefresh`
+  // since a lightweight ~5000-line tail read (see routers/dashboard.py's
+  // live-ticker endpoint) is cheap enough to just always run while this
+  // page is mounted.
+  useEffect(() => {
+    function loadTicker() {
+      api
+        .liveTicker()
+        .then((data) => setLiveTicker(data.entries))
+        .catch(() => setLiveTicker(null));
+    }
+    loadTicker();
+    const id = setInterval(loadTicker, 10_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Auto-refresh: paused while the user is actively rearranging tiles in
   // "Anpassen" mode (a refresh mid-drag wouldn't lose the layout itself --
@@ -213,6 +250,31 @@ export function Dashboard() {
 
   function handleResetLayout() {
     setLayout(resetLayout());
+  }
+
+  function startEditingClientLabel(ip: string) {
+    setEditingClientIp(ip);
+    setClientLabelDraft(clientLabels[ip] ?? "");
+  }
+
+  async function handleSaveClientLabel(ip: string) {
+    const label = clientLabelDraft.trim();
+    setSavingClientLabel(true);
+    try {
+      if (label) {
+        const result = await api.setClientLabel(ip, label);
+        setClientLabels(result.labels);
+      } else {
+        // Empty input clears an existing label instead of saving a blank one.
+        const result = await api.deleteClientLabel(ip);
+        setClientLabels(result.labels);
+      }
+      setEditingClientIp(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("dashboard.clientLabelSaveFailed"));
+    } finally {
+      setSavingClientLabel(false);
+    }
   }
 
   function handleExportCsv() {
@@ -430,6 +492,43 @@ export function Dashboard() {
     };
   }
 
+  if (liveTicker) {
+    widgetDefs.liveTicker = {
+      title: t("dashboard.liveTicker"),
+      node: (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Radio className="h-4 w-4" /> {t("dashboard.liveTicker")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {liveTicker.length === 0 ? (
+              <p className="px-5 pb-4 text-sm text-[var(--muted)]">{t("dashboard.liveTickerEmpty")}</p>
+            ) : (
+              <div className="flex max-h-72 flex-col divide-y divide-[var(--border)] overflow-y-auto">
+                {liveTicker.map((entry, i) => (
+                  <div key={i} className="flex items-center justify-between px-5 py-2 text-sm">
+                    <div className="flex items-center gap-2.5">
+                      <Badge variant={entry.cache_status === "HIT" ? "ok" : "warn"}>
+                        {entry.cache_status === "HIT" ? t("dashboard.liveTicker.hit") : t("dashboard.liveTicker.miss")}
+                      </Badge>
+                      <span className="font-medium capitalize">{SERVICE_LABEL[entry.service] ?? entry.service}</span>
+                      <span className="text-[var(--muted)]">{clientLabels[entry.client_ip] ?? entry.client_ip}</span>
+                    </div>
+                    <span className="text-[var(--muted)]">
+                      {formatBytes(entry.bytes)} · {new Date(entry.timestamp).toLocaleTimeString(locale)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ),
+    };
+  }
+
   if (history && history.length > 0) {
     widgetDefs.runHistory = {
       title: t("dashboard.runHistory"),
@@ -558,21 +657,72 @@ export function Dashboard() {
             <p className="text-sm text-[var(--muted)]">{t("dashboard.noClients")}</p>
           ) : (
             <div className="flex flex-col divide-y divide-[var(--border)]">
-              {top_clients.map((c) => (
-                <div key={c.client_ip} className="flex items-center justify-between py-2.5 text-sm">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="neutral">{c.client_ip}</Badge>
+              {top_clients.map((c) => {
+                const label = clientLabels[c.client_ip];
+                const isEditing = editingClientIp === c.client_ip;
+                return (
+                  <div key={c.client_ip} className="flex items-center justify-between py-2.5 text-sm">
+                    <div className="flex items-center gap-3">
+                      {isEditing ? (
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            autoFocus
+                            value={clientLabelDraft}
+                            onChange={(e) => setClientLabelDraft(e.target.value)}
+                            placeholder={t("dashboard.clientLabelPlaceholder")}
+                            className="h-7 w-36 text-xs"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveClientLabel(c.client_ip);
+                              if (e.key === "Escape") setEditingClientIp(null);
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={savingClientLabel}
+                            onClick={() => handleSaveClientLabel(c.client_ip)}
+                          >
+                            {t("dashboard.clientLabelSave")}
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => setEditingClientIp(null)}>
+                            {t("dashboard.clientLabelCancel")}
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          {label ? (
+                            <span className="flex flex-col">
+                              <span className="font-medium">{label}</span>
+                              <span className="text-xs text-[var(--muted)]">{c.client_ip}</span>
+                            </span>
+                          ) : (
+                            <Badge variant="neutral">{c.client_ip}</Badge>
+                          )}
+                          {!isViewer && (
+                            <button
+                              type="button"
+                              aria-label={t("dashboard.clientLabelEdit")}
+                              title={t("dashboard.clientLabelEdit")}
+                              onClick={() => startEditingClientLabel(c.client_ip)}
+                              className="rounded p-1 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          )}
+                          <span className="text-[var(--muted)]">
+                            {c.requests.toLocaleString(locale)} {t("dashboard.clientRequests")}
+                          </span>
+                        </>
+                      )}
+                    </div>
                     <span className="text-[var(--muted)]">
-                      {c.requests.toLocaleString(locale)} {t("dashboard.clientRequests")}
+                      {formatBytes(c.total_bytes)}
+                      {c.last_seen &&
+                        ` · ${t("dashboard.clientLastSeen")} ${new Date(c.last_seen).toLocaleString(locale)}`}
                     </span>
                   </div>
-                  <span className="text-[var(--muted)]">
-                    {formatBytes(c.total_bytes)}
-                    {c.last_seen &&
-                      ` · ${t("dashboard.clientLastSeen")} ${new Date(c.last_seen).toLocaleString(locale)}`}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

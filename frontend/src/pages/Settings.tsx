@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Archive, Bell, CheckCircle2, Download, ExternalLink, Heart, Image, Info, KeyRound, LogIn, Palette, Send, ShieldCheck, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
+import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, ExternalLink, Heart, Home, Image, Info, KeyRound, LogIn, Palette, Send, ShieldCheck, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -215,6 +215,40 @@ export function Settings() {
     }
   }
 
+  function buildHaYaml(): string {
+    // window.location.origin at generation time -- the user still has to
+    // fill in a real token (never generated/shown here, see the API-tokens
+    // card above), but the host/port is already correct for wherever this
+    // page is actually being viewed from.
+    const base = window.location.origin;
+    return [
+      "sensor:",
+      "  - platform: rest",
+      "    name: CachePanel",
+      `    resource: ${base}/api/ha/sensors`,
+      "    headers:",
+      '      Authorization: "Bearer DEIN_API_TOKEN"',
+      '    value_template: "{{ value_json.hit_ratio_percent }}"',
+      "    unit_of_measurement: \"%\"",
+      "    json_attributes:",
+      "      - bandwidth_saved_gb",
+      "      - total_requests",
+      "      - disk_percent_used",
+      "      - forecast_available",
+      "      - hours_until_full",
+      "    scan_interval: 300",
+    ].join("\n");
+  }
+
+  async function handleCopyHaYaml() {
+    try {
+      await navigator.clipboard.writeText(buildHaYaml());
+      toast.success(t("settings.homeAssistantCopied"));
+    } catch {
+      // see handleCopyToken -- the snippet stays visible on screen either way.
+    }
+  }
+
   async function handleDeleteToken(id: number) {
     if (!window.confirm(t("settings.apiTokensDeleteConfirm"))) return;
     setDeletingTokenId(id);
@@ -408,7 +442,7 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="section-users">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-4 w-4" /> {t("settings.users")}
@@ -494,7 +528,7 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="section-2fa">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4" /> {t("settings.twoFactor")}
@@ -672,7 +706,7 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="section-notifications">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Bell className="h-4 w-4" /> {t("settings.notifications")}
@@ -843,7 +877,7 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="section-heartbeat">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Heart className="h-4 w-4" /> {t("settings.heartbeat")}
@@ -877,7 +911,7 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="section-ntfy">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Bell className="h-4 w-4" /> {t("settings.ntfy")}
@@ -933,7 +967,7 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="section-autobackup">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Archive className="h-4 w-4" /> {t("settings.autoBackup")}
@@ -1010,7 +1044,7 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="section-autocleanup">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trash2 className="h-4 w-4" /> {t("settings.autoCleanup")}
@@ -1042,7 +1076,7 @@ export function Settings() {
       </Card>
 
       {isAdmin && (
-        <Card>
+        <Card id="section-api-tokens">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Terminal className="h-4 w-4" /> {t("settings.apiTokens")}
@@ -1115,6 +1149,27 @@ export function Settings() {
         </Card>
       )}
 
+      {isAdmin && (
+        <Card id="section-home-assistant">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Home className="h-4 w-4" /> {t("settings.homeAssistant")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-xs text-[var(--muted)]">{t("settings.homeAssistantHint")}</p>
+            <pre className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs">
+              <code>{buildHaYaml()}</code>
+            </pre>
+            <div>
+              <Button type="button" variant="outline" size="sm" onClick={handleCopyHaYaml}>
+                <Copy className="h-3.5 w-3.5" /> {t("settings.homeAssistantCopy")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <ScheduleCard />
 
       <Card>
@@ -1167,7 +1222,7 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="section-display">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Tv className="h-4 w-4" /> {t("settings.publicDisplay")}

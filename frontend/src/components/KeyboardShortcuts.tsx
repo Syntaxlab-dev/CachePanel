@@ -112,6 +112,7 @@ export function KeyboardShortcuts() {
             { keys: ["g", "s"], label: t("shortcuts.goSettings") },
             { keys: ["/"], label: t("shortcuts.focusSearch") },
             { keys: ["?"], label: t("shortcuts.openHelp") },
+            { keys: ["⌘/Ctrl", "K"], label: t("shortcuts.openPalette") },
           ].map(({ keys, label }) => (
             <div key={label} className="flex items-center justify-between gap-3">
               <dt className="text-[var(--muted)]">{label}</dt>

@@ -18,6 +18,7 @@ import { getPreferredTheme, setTheme, type Theme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { CommandPalette } from "@/components/CommandPalette";
 
 export function Layout() {
   const [theme, setThemeState] = useState<Theme>(() => getPreferredTheme());
@@ -121,6 +122,7 @@ export function Layout() {
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg)] text-[var(--ink)] md:flex-row">
       <KeyboardShortcuts />
+      <CommandPalette />
 
       {/* Mobile top bar: only the desktop sidebar is hidden below md, this
           bar (hamburger + brand) takes its place so there's always a way

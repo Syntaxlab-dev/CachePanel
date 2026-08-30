@@ -75,6 +75,15 @@ _SCHEMA_STATEMENTS = [
         created_date TEXT NOT NULL
     )
     """,
+    # Client IP -> human-readable device name (3rd feature round, Welle 3)
+    # -- see client_labels_store.py. Plain text, not a secret, so no Fernet
+    # blob here unlike app_settings.
+    """
+    CREATE TABLE IF NOT EXISTS client_labels (
+        ip TEXT PRIMARY KEY,
+        label TEXT NOT NULL
+    )
+    """,
 ]
 
 # Run unconditionally, after _SCHEMA_STATEMENTS, on every startup -- each

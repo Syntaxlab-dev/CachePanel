@@ -14,9 +14,11 @@ from app.routers import (
     backup,
     battlenet,
     cache,
+    client_labels,
     dashboard,
     epic,
     export_import,
+    ha,
     health,
     metrics,
     prefill,
@@ -82,6 +84,8 @@ app.include_router(backup.router)
 app.include_router(users.router)
 app.include_router(public_display.router)
 app.include_router(api_tokens.router)
+app.include_router(client_labels.router)
+app.include_router(ha.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 

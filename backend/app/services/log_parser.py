@@ -180,6 +180,27 @@ def recent_activity(entries: list[AccessEntry], bucket_minutes: int = 10, limit:
     return rows[:limit]
 
 
+def recent_entries(entries: list[AccessEntry], limit: int = 20) -> list[dict]:
+    """The most recent individual (not aggregated) log entries, newest
+    first -- for a "what just happened" live ticker, as opposed to
+    recent_activity()'s time-bucketed grouping. LanCache logs one line per
+    completed request, not per in-progress byte, so this is honestly a
+    pulse of the last few finished requests, not a true download-progress
+    feed -- see routers/dashboard.py's live-ticker endpoint docstring.
+    """
+    ordered = sorted(entries, key=lambda e: e.timestamp, reverse=True)[:limit]
+    return [
+        {
+            "timestamp": e.timestamp.isoformat(),
+            "service": e.service,
+            "client_ip": e.client_ip,
+            "bytes": e.bytes,
+            "cache_status": e.cache_status,
+        }
+        for e in ordered
+    ]
+
+
 def client_stats(entries: list[AccessEntry], limit: int = 20) -> list[dict]:
     """Aggregates per-client-IP traffic across all services, for a "top
     clients" view. Same full-scan approach as aggregate_service_stats --

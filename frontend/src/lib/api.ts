@@ -97,6 +97,23 @@ export interface ApiToken {
   created_date: string;
 }
 
+export interface LiveTickerEntry {
+  timestamp: string;
+  service: string;
+  client_ip: string;
+  bytes: number;
+  cache_status: string;
+}
+
+export interface HaSensors {
+  hit_ratio_percent: number;
+  bandwidth_saved_gb: number;
+  total_requests: number;
+  disk_percent_used: number | null;
+  forecast_available: boolean;
+  hours_until_full: number | null;
+}
+
 export interface CacheForecast {
   available: boolean;
   reason: "not_enough_data" | "not_growing" | "disk_usage_unavailable" | null;
@@ -351,6 +368,20 @@ export const api = {
   createToken: (label: string) =>
     request<{ token: string }>("/api/tokens", { method: "POST", body: JSON.stringify({ label }) }),
   deleteToken: (id: number) => request<{ ok: boolean }>(`/api/tokens/${id}`, { method: "DELETE" }),
+
+  liveTicker: () => request<{ entries: LiveTickerEntry[] }>("/api/dashboard/live-ticker"),
+  haSensors: () => request<HaSensors>("/api/ha/sensors"),
+
+  clientLabels: () => request<{ labels: Record<string, string> }>("/api/client-labels"),
+  setClientLabel: (ip: string, label: string) =>
+    request<{ labels: Record<string, string> }>("/api/client-labels", {
+      method: "POST",
+      body: JSON.stringify({ ip, label }),
+    }),
+  deleteClientLabel: (ip: string) =>
+    request<{ labels: Record<string, string> }>(`/api/client-labels/${encodeURIComponent(ip)}`, {
+      method: "DELETE",
+    }),
 };
 
 export function prefillStreamUrl(service: "steam" | "battlenet" | "epic"): string {

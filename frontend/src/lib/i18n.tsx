@@ -376,6 +376,7 @@ const dictionaries = {
     "shortcuts.goSettings": "Zu den Einstellungen",
     "shortcuts.focusSearch": "Suche fokussieren",
     "shortcuts.openHelp": "Diese Übersicht öffnen",
+    "shortcuts.openPalette": "Befehlspalette öffnen",
     "shortcuts.close": "Schließen",
 
     "schedule.legacyWarning":
@@ -399,6 +400,26 @@ const dictionaries = {
     "dashboard.customize.hide": "Ausblenden",
     "dashboard.customize.show": "Einblenden",
     "dashboard.customize.hidden": "Ausgeblendet",
+
+    "dashboard.clientLabelEdit": "Umbenennen",
+    "dashboard.clientLabelPlaceholder": "z. B. Gaming-PC",
+    "dashboard.clientLabelSave": "Speichern",
+    "dashboard.clientLabelCancel": "Abbrechen",
+    "dashboard.clientLabelSaveFailed": "Speichern fehlgeschlagen",
+
+    "dashboard.liveTicker": "Live-Aktivität",
+    "dashboard.liveTickerEmpty": "Noch keine Anfragen aufgezeichnet.",
+    "dashboard.liveTicker.hit": "Treffer",
+    "dashboard.liveTicker.miss": "Neu geladen",
+
+    "settings.homeAssistant": "Home Assistant",
+    "settings.homeAssistantHint":
+      "Erst einen API-Token oben anlegen, dann diese Vorlage mit deinem echten Token in deine configuration.yaml einfügen.",
+    "settings.homeAssistantCopy": "YAML kopieren",
+    "settings.homeAssistantCopied": "YAML-Vorlage kopiert.",
+
+    "commandPalette.placeholder": "Seite oder Einstellung suchen…",
+    "commandPalette.noResults": "Keine Treffer.",
   },
   en: {
     "nav.dashboard": "Dashboard",
@@ -766,6 +787,7 @@ const dictionaries = {
     "shortcuts.goSettings": "Go to settings",
     "shortcuts.focusSearch": "Focus search",
     "shortcuts.openHelp": "Open this overview",
+    "shortcuts.openPalette": "Open command palette",
     "shortcuts.close": "Close",
 
     "schedule.legacyWarning":
@@ -789,6 +811,26 @@ const dictionaries = {
     "dashboard.customize.hide": "Hide",
     "dashboard.customize.show": "Show",
     "dashboard.customize.hidden": "Hidden",
+
+    "dashboard.clientLabelEdit": "Rename",
+    "dashboard.clientLabelPlaceholder": "e.g. Gaming PC",
+    "dashboard.clientLabelSave": "Save",
+    "dashboard.clientLabelCancel": "Cancel",
+    "dashboard.clientLabelSaveFailed": "Save failed",
+
+    "dashboard.liveTicker": "Live activity",
+    "dashboard.liveTickerEmpty": "No requests recorded yet.",
+    "dashboard.liveTicker.hit": "Hit",
+    "dashboard.liveTicker.miss": "Miss",
+
+    "settings.homeAssistant": "Home Assistant",
+    "settings.homeAssistantHint":
+      "Create an API token above first, then paste this template into your configuration.yaml with your real token filled in.",
+    "settings.homeAssistantCopy": "Copy YAML",
+    "settings.homeAssistantCopied": "YAML template copied.",
+
+    "commandPalette.placeholder": "Search a page or setting…",
+    "commandPalette.noResults": "No matches.",
   },
 } as const;
 

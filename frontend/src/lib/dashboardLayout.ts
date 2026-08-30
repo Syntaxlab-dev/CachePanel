@@ -11,7 +11,8 @@ export type WidgetId =
   | "trafficTimeline"
   | "trafficPerService"
   | "topClients"
-  | "recentActivity";
+  | "recentActivity"
+  | "liveTicker";
 
 // Single source of truth for both the default layout and for sanitizing
 // whatever's in localStorage -- if a future wave adds or removes a widget,
@@ -22,6 +23,7 @@ export const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   "diagnostics",
   "cacheIntegrity",
   "cacheForecast",
+  "liveTicker",
   "runHistory",
   "trafficTimeline",
   "trafficPerService",

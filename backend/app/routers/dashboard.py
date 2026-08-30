@@ -6,6 +6,7 @@ from app.services.log_parser import (
     client_stats,
     iter_access_entries,
     recent_activity,
+    recent_entries,
     traffic_timeline,
 )
 from app.settings import settings
@@ -65,3 +66,17 @@ def get_stats(window: str = Query("24h", pattern="^(24h|7d|30d)$")):
         "timeline": traffic_timeline(entries, bucket_minutes=bucket_minutes, limit=bucket_limit),
         "top_clients": client_stats(entries),
     }
+
+
+@router.get(
+    "/live-ticker",
+    summary="Recent individual requests",
+    description="The last ~20 individual completed requests, newest first -- a lighter, separate endpoint "
+    "from /stats so a frequently-polling 'what's happening now' widget doesn't recompute the full heavier "
+    "aggregation on every poll. Honest framing: LanCache logs one line per completed request, not per "
+    "in-progress byte, so this is a pulse of recent activity, not a live download-progress bar.",
+)
+def get_live_ticker():
+    access_path = settings.lancache_log_dir / "access.log"
+    entries = iter_access_entries(access_path, max_lines=5_000)
+    return {"entries": recent_entries(entries)}
