@@ -47,6 +47,20 @@ below unchanged. Deliberately excluded from /api/tokens/* itself -- token
 routers/api_tokens.py's own docstring), otherwise a leaked read-only token
 could mint itself more tokens.
 
+Also excluded (4th feature round, Welle 2, found during that round's own
+review rather than requested up front): /api/settings/* itself. GET
+/api/settings returns every setting including decrypted secrets (Steam API
+key, Discord webhook URL, ntfy topic, ...) -- fine for a real admin/viewer
+*session* (a second logged-in human with the read-only role is trusted
+with the whole account), but a generated API token is documented and
+handed out for narrow machine-to-machine integrations (see the
+Home-Assistant sensor YAML Settings itself generates) that never need
+those secrets. Without this exclusion, a token pasted into a Home
+Assistant config -- exactly the workflow this feature ships -- would also
+be a valid credential for reading every stored secret. Same "narrower
+trust boundary than a plain viewer session" reasoning as /api/tokens/*
+above, just for confidentiality instead of write access.
+
 Since the 4th feature round (Welle 2), three more checks live here:
 
 1. Per-token rate limiting (see services/token_rate_limit.py): a verified
@@ -90,7 +104,7 @@ from app.services import api_token_store, app_settings_store, auth_credentials_s
 _EXEMPT_PREFIX = "/api/auth/"
 _SETUP_EXEMPT_PATHS = {"/api/backup/restore"}
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-_TOKEN_MGMT_PREFIX = "/api/tokens"
+_BEARER_EXEMPT_PREFIXES = ("/api/tokens", "/api/settings")
 
 
 def _client_ip(request: Request) -> str:
@@ -104,7 +118,7 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
         if not path.startswith("/api/"):
             return await call_next(request)
 
-        if not path.startswith(_TOKEN_MGMT_PREFIX):
+        if not path.startswith(_BEARER_EXEMPT_PREFIXES):
             auth_header = request.headers.get("authorization", "")
             if auth_header.startswith("Bearer "):
                 raw_token = auth_header.removeprefix("Bearer ").strip()
