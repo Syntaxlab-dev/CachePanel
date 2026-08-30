@@ -48,11 +48,19 @@ _SCHEMA_STATEMENTS = [
     """,
     # The username/password_hash pairs that guard the panel itself. One or
     # more rows -- see auth_credentials_store.py for the multi-user contract.
+    # role/totp_* are also created here directly so a brand-new deployment
+    # gets the current shape immediately; _AUTH_MIGRATION_STATEMENTS below
+    # adds the same columns to a table that already existed before this
+    # feature round (IF NOT EXISTS makes running both against a fresh
+    # table a harmless no-op).
     """
     CREATE TABLE IF NOT EXISTS auth (
         id SERIAL PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'admin',
+        totp_secret TEXT,
+        totp_enabled BOOLEAN NOT NULL DEFAULT FALSE
     )
     """,
 ]
@@ -77,6 +85,14 @@ _AUTH_MIGRATION_STATEMENTS = [
         END IF;
     END $$
     """,
+    # role/TOTP columns (3rd feature round) -- ADD COLUMN IF NOT EXISTS is
+    # itself idempotent, no DO $$ guard needed. Defaults match
+    # auth_credentials_store.py's _normalize(): role="admin" so an existing
+    # account never loses privileges, totp_enabled=FALSE so nobody is
+    # suddenly asked for a second factor they never set up.
+    "ALTER TABLE auth ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin'",
+    "ALTER TABLE auth ADD COLUMN IF NOT EXISTS totp_secret TEXT",
+    "ALTER TABLE auth ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 

@@ -79,6 +79,9 @@ export interface AppSettings {
   report_hour: number;
   report_minute: number;
   public_display_enabled: boolean;
+  heartbeat_url: string;
+  ntfy_server_url: string;
+  ntfy_topic: string;
 }
 
 export interface CacheForecast {
@@ -162,8 +165,11 @@ export interface ExportBundle {
   epic_app_ids: string[];
 }
 
+export type PanelRole = "admin" | "viewer";
+
 export interface PanelUser {
   username: string;
+  role: PanelRole;
 }
 
 export interface BackupBundle {
@@ -175,10 +181,11 @@ export interface BackupBundle {
   settings_encrypted: string;
   schedule: ScheduleConfigLike;
   run_history: RunHistoryEntry[];
-  // Every panel account's {username, password_hash} since Welle 4 --
-  // accepts an older single-object backup on restore too, the backend
-  // normalizes that shape.
-  auth: { username: string; password_hash: string }[] | { username: string; password_hash: string } | null;
+  // Every panel account's {username, password_hash, role, totp_secret,
+  // totp_enabled} since the 3rd feature round added roles/2FA -- accepts
+  // an older single-object (pre-Welle-4) or role/2FA-less (pre-3rd-round)
+  // backup on restore too, the backend normalizes both shapes.
+  auth: Record<string, unknown>[] | Record<string, unknown> | null;
 }
 
 // ScheduleConfig itself is defined further down, after this type is used --
@@ -194,6 +201,18 @@ export interface UpdateCheckResult {
 export interface AuthStatus {
   setup_required: boolean;
   authenticated: boolean;
+  role: PanelRole | null;
+  totp_enabled: boolean;
+}
+
+export interface LoginResult {
+  ok: boolean;
+  totp_required: boolean;
+}
+
+export interface TotpSetupResult {
+  secret: string;
+  uri: string;
 }
 
 export interface ServiceSchedule {
@@ -257,6 +276,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ webhook_url: webhookUrl }),
     }),
+  testNtfy: (serverUrl: string, topic: string) =>
+    request<{ message: string }>("/api/settings/notifications/test-ntfy", {
+      method: "POST",
+      body: JSON.stringify({ server_url: serverUrl, topic }),
+    }),
   sendCacheReport: (webhookUrl: string) =>
     request<{ message: string }>("/api/settings/notifications/test-report", {
       method: "POST",
@@ -289,12 +313,20 @@ export const api = {
   authSetup: (username: string, password: string) =>
     request<{ ok: boolean }>("/api/auth/setup", { method: "POST", body: JSON.stringify({ username, password }) }),
   authLogin: (username: string, password: string) =>
-    request<{ ok: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+    request<LoginResult>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  authLoginTotp: (code: string) =>
+    request<{ ok: boolean }>("/api/auth/login/totp", { method: "POST", body: JSON.stringify({ code }) }),
   authLogout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
 
+  totpSetup: () => request<TotpSetupResult>("/api/auth/totp/setup", { method: "POST" }),
+  totpConfirm: (code: string) =>
+    request<{ ok: boolean }>("/api/auth/totp/confirm", { method: "POST", body: JSON.stringify({ code }) }),
+  totpDisable: (password: string) =>
+    request<{ ok: boolean }>("/api/auth/totp/disable", { method: "POST", body: JSON.stringify({ password }) }),
+
   listUsers: () => request<{ users: PanelUser[] }>("/api/users"),
-  addUser: (username: string, password: string) =>
-    request<{ ok: boolean }>("/api/users", { method: "POST", body: JSON.stringify({ username, password }) }),
+  addUser: (username: string, password: string, role: PanelRole) =>
+    request<{ ok: boolean }>("/api/users", { method: "POST", body: JSON.stringify({ username, password, role }) }),
   removeUser: (username: string) =>
     request<{ ok: boolean }>(`/api/users/${encodeURIComponent(username)}`, { method: "DELETE" }),
 

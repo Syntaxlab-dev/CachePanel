@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.services import app_settings_store, cache_report, discord_notifier, scheduler_service, update_check
+from app.services import app_settings_store, cache_report, discord_notifier, ntfy_notifier, scheduler_service, update_check
 from app.settings import settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -21,10 +21,18 @@ class SettingsUpdate(BaseModel):
     report_hour: int | None = None
     report_minute: int | None = None
     public_display_enabled: bool | None = None
+    heartbeat_url: str | None = None
+    ntfy_server_url: str | None = None
+    ntfy_topic: str | None = None
 
 
 class NotificationTestRequest(BaseModel):
     webhook_url: str
+
+
+class NtfyTestRequest(BaseModel):
+    server_url: str
+    topic: str
 
 
 @router.get("", summary="Current app settings", description="Steam API key + SteamID64, as stored (encrypted at rest) on this instance. Never shared with anyone else.")
@@ -52,6 +60,18 @@ def update_settings(body: SettingsUpdate):
 def test_notification(body: NotificationTestRequest):
     if not discord_notifier.send_test_message(body.webhook_url):
         raise HTTPException(status_code=400, detail="Could not deliver the test message -- check the webhook URL.")
+    return {"message": "Test message sent."}
+
+
+@router.post(
+    "/notifications/test-ntfy",
+    summary="Send an ntfy test message",
+    description="Posts a test message to the given ntfy server/topic directly (not necessarily the saved "
+    "one), so the user can verify it works before saving.",
+)
+def test_ntfy(body: NtfyTestRequest):
+    if not ntfy_notifier.send_test_message(body.server_url, body.topic):
+        raise HTTPException(status_code=400, detail="Could not deliver the test message -- check server/topic.")
     return {"message": "Test message sent."}
 
 

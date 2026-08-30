@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import docker
 from docker.errors import DockerException, NotFound
 
-from app.services import app_settings_store, discord_notifier, run_history_store
+from app.services import app_settings_store, discord_notifier, ntfy_notifier, run_history_store
 from app.settings import settings
 
 PREFILL_COMMANDS: dict[str, tuple[str, list[str]]] = {
@@ -34,22 +34,34 @@ class PrefillRunnerError(RuntimeError):
 
 
 def _notify_run_result(service: str, exit_code: int, duration_seconds: float) -> None:
-    """Fires the configured Discord notification for a finished run, if any
-    -- covers both manual (trigger_prefill) and scheduled (via
+    """Fires the configured Discord AND ntfy notifications for a finished
+    run, if any -- covers both manual (trigger_prefill) and scheduled (via
     scheduler_service, which also calls trigger_prefill) runs, plus the SSE
-    live-log path (stream_prefill) below. Never raises: a webhook failure
-    must not turn a successful/failed prefill run into a 500."""
+    live-log path (stream_prefill) below. Each channel is independent (one
+    can be on while the other is off) and never raises: a webhook/ntfy
+    failure must not turn a successful/failed prefill run into a 500."""
+    cfg = app_settings_store.get_settings()
+
     try:
-        cfg = app_settings_store.get_settings()
         webhook_url = cfg.get("discord_webhook_url") or ""
-        if not webhook_url:
-            return
-        if exit_code == 0 and cfg.get("discord_notify_success"):
-            discord_notifier.notify_prefill_success(webhook_url, service, duration_seconds)
-        elif exit_code != 0 and cfg.get("discord_notify_failure"):
-            discord_notifier.notify_prefill_failure(webhook_url, service, exit_code)
+        if webhook_url:
+            if exit_code == 0 and cfg.get("discord_notify_success"):
+                discord_notifier.notify_prefill_success(webhook_url, service, duration_seconds)
+            elif exit_code != 0 and cfg.get("discord_notify_failure"):
+                discord_notifier.notify_prefill_failure(webhook_url, service, exit_code)
     except Exception:
         logging.getLogger("cachepanel.discord").exception("Failed to send prefill-result notification")
+
+    try:
+        ntfy_server = cfg.get("ntfy_server_url") or ""
+        ntfy_topic = cfg.get("ntfy_topic") or ""
+        if ntfy_topic:
+            if exit_code == 0 and cfg.get("discord_notify_success"):
+                ntfy_notifier.notify_prefill_success(ntfy_server, ntfy_topic, service, duration_seconds)
+            elif exit_code != 0 and cfg.get("discord_notify_failure"):
+                ntfy_notifier.notify_prefill_failure(ntfy_server, ntfy_topic, service, exit_code)
+    except Exception:
+        logging.getLogger("cachepanel.ntfy").exception("Failed to send prefill-result notification")
 
 
 def trigger_prefill(service: str) -> PrefillRunResult:

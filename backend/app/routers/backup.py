@@ -28,7 +28,11 @@ The bcrypt password hashes (panel logins), by contrast, ARE included as-is
 -- see auth_credentials_store.py's own reasoning: a bcrypt hash is already
 safe to store/expose, wrapping it in another encryption layer wouldn't add
 real protection. Since Welle 4 (multi-user panel logins) this is every
-account, not just one.
+account, not just one. Since the 3rd feature round each account entry also
+carries `role` (str), `totp_secret` (str or null) and `totp_enabled`
+(bool) -- see the widened `auth` field type below, which used to be
+`dict[str, str]` and would otherwise reject a real backup taken after this
+round with a Pydantic validation error on `totp_enabled` not being a string.
 """
 
 import base64
@@ -51,7 +55,10 @@ class BackupBundle(BaseModel):
     # Accepts both the current list-of-accounts shape and a pre-Welle-4
     # single-object backup (normalized to a one-item list in restore_backup
     # below), so an older backup file still restores after this upgrade.
-    auth: list[dict[str, str]] | dict[str, str] | None = Field(default_factory=list)
+    # Untyped `dict` (not `dict[str, str]`) because an account entry now
+    # also carries non-string fields (`totp_enabled` is a bool, `totp_secret`
+    # can be null) -- see the module docstring.
+    auth: list[dict] | dict | None = Field(default_factory=list)
 
 
 @router.get(

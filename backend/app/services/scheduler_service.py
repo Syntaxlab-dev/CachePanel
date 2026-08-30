@@ -13,10 +13,11 @@ instead of accumulating duplicate jobs.
 
 import logging
 
+import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.services import app_settings_store, cache_manager, cache_report, discord_notifier, schedule_store
+from app.services import app_settings_store, cache_manager, cache_report, discord_notifier, ntfy_notifier, schedule_store
 from app.services.cache_manager import CacheManagerError
 from app.services.prefill_runner import PrefillRunnerError, trigger_prefill
 
@@ -29,6 +30,10 @@ _DISK_WARNING_THRESHOLD_PERCENT = 90
 _DISK_WARNING_INTERVAL_MINUTES = 30
 
 _REPORT_JOB_ID = "cache-report"
+
+_HEARTBEAT_JOB_ID = "heartbeat-ping"
+_HEARTBEAT_INTERVAL_MINUTES = 1
+_HEARTBEAT_REQUEST_TIMEOUT = 5
 
 # Tracks whether a disk-warning notification has already fired for the
 # *current* above-threshold spell, so a still-full disk doesn't re-notify
@@ -48,7 +53,8 @@ def _check_disk_warning() -> None:
     global _disk_warning_active
     cfg = app_settings_store.get_settings()
     webhook_url = cfg.get("discord_webhook_url") or ""
-    if not webhook_url or not cfg.get("discord_notify_disk_warning"):
+    ntfy_topic = cfg.get("ntfy_topic") or ""
+    if not cfg.get("discord_notify_disk_warning") or (not webhook_url and not ntfy_topic):
         return
 
     try:
@@ -59,10 +65,27 @@ def _check_disk_warning() -> None:
 
     if usage.percent_used >= _DISK_WARNING_THRESHOLD_PERCENT:
         if not _disk_warning_active:
-            discord_notifier.notify_disk_warning(webhook_url, usage.percent_used)
+            if webhook_url:
+                discord_notifier.notify_disk_warning(webhook_url, usage.percent_used)
+            if ntfy_topic:
+                ntfy_notifier.notify_disk_warning(cfg.get("ntfy_server_url") or "", ntfy_topic, usage.percent_used)
             _disk_warning_active = True
     else:
         _disk_warning_active = False
+
+
+def _ping_heartbeat() -> None:
+    cfg = app_settings_store.get_settings()
+    heartbeat_url = cfg.get("heartbeat_url") or ""
+    if not heartbeat_url:
+        return
+    try:
+        requests.get(heartbeat_url, timeout=_HEARTBEAT_REQUEST_TIMEOUT)
+    except requests.RequestException:
+        # Never raises -- a missed heartbeat is exactly what the external
+        # monitor (Healthchecks.io / Uptime Kuma push monitor) is watching
+        # for, this job just doesn't need to also log every network hiccup.
+        pass
 
 
 def _send_cache_report() -> None:
@@ -132,6 +155,13 @@ def start_and_reload() -> None:
         trigger="interval",
         minutes=_DISK_WARNING_INTERVAL_MINUTES,
         id=_DISK_WARNING_JOB_ID,
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _ping_heartbeat,
+        trigger="interval",
+        minutes=_HEARTBEAT_INTERVAL_MINUTES,
+        id=_HEARTBEAT_JOB_ID,
         replace_existing=True,
     )
 

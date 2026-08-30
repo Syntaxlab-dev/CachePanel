@@ -39,6 +39,16 @@ _DEFAULTS = {
     # (fail closed): the /display-data endpoint returns 404 unless this is
     # explicitly turned on, so a fresh install never exposes it by accident.
     "public_display_enabled": False,
+    # External heartbeat (Healthchecks.io / Uptime Kuma push monitor) --
+    # see scheduler_service.py's heartbeat job. Blank = off, same contract
+    # as every other optional integration in this file.
+    "heartbeat_url": "",
+    # ntfy.sh (or a self-hosted instance) as a second notification channel
+    # alongside Discord -- see ntfy_notifier.py. server_url defaults to the
+    # public service since that's the common case; topic blank = off (a
+    # server URL alone isn't enough to publish anywhere).
+    "ntfy_server_url": "https://ntfy.sh",
+    "ntfy_topic": "",
 }
 
 

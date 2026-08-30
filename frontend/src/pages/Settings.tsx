@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Archive, Bell, CheckCircle2, Download, ExternalLink, Image, Info, KeyRound, LogIn, Palette, Send, Sparkles, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
+import { AlertCircle, Archive, Bell, CheckCircle2, Download, ExternalLink, Heart, Image, Info, KeyRound, LogIn, Palette, Send, ShieldCheck, Sparkles, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScheduleCard } from "@/components/ScheduleCard";
-import { api, type AppSettings, type BackupBundle, type ExportBundle, type PanelUser, type UpdateCheckResult, type VersionInfo } from "@/lib/api";
+import { api, type AppSettings, type BackupBundle, type ExportBundle, type PanelRole, type PanelUser, type UpdateCheckResult, type VersionInfo } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { ACCENTS, getStoredAccent, setAccent, type Accent } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 export function Settings() {
   const { t } = useI18n();
+  const { role: myRole, totpEnabled, refresh: refreshAuth } = useAuth();
+  const isViewer = myRole === "viewer";
   const [accent, setAccentState] = useState<Accent>(() => getStoredAccent());
   const [values, setValues] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +22,7 @@ export function Settings() {
   const [loginNotice, setLoginNotice] = useState<"success" | "failed" | null>(null);
   const [importing, setImporting] = useState(false);
   const [testingWebhook, setTestingWebhook] = useState(false);
+  const [testingNtfy, setTestingNtfy] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
   const [version, setVersion] = useState<VersionInfo | null>(null);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
@@ -27,8 +31,14 @@ export function Settings() {
   const [users, setUsers] = useState<PanelUser[] | null>(null);
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [newRole, setNewRole] = useState<PanelRole>("admin");
   const [addingUser, setAddingUser] = useState(false);
   const [removingUser, setRemovingUser] = useState<string | null>(null);
+  const [totpSetupSecret, setTotpSetupSecret] = useState<string | null>(null);
+  const [totpSetupUri, setTotpSetupUri] = useState<string | null>(null);
+  const [totpConfirmCode, setTotpConfirmCode] = useState("");
+  const [totpDisablePassword, setTotpDisablePassword] = useState("");
+  const [totpBusy, setTotpBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const backupFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -69,15 +79,74 @@ export function Settings() {
     e.preventDefault();
     setAddingUser(true);
     try {
-      await api.addUser(newUsername.trim(), newPassword);
+      await api.addUser(newUsername.trim(), newPassword, newRole);
       setNewUsername("");
       setNewPassword("");
+      setNewRole("admin");
       toast.success(t("settings.usersAdded"));
       reloadUsers();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("settings.usersAddFailed"));
     } finally {
       setAddingUser(false);
+    }
+  }
+
+  async function handleTotpSetup() {
+    setTotpBusy(true);
+    try {
+      const result = await api.totpSetup();
+      setTotpSetupSecret(result.secret);
+      setTotpSetupUri(result.uri);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.twoFactorSetupFailed"));
+    } finally {
+      setTotpBusy(false);
+    }
+  }
+
+  async function handleTotpConfirm(e: FormEvent) {
+    e.preventDefault();
+    setTotpBusy(true);
+    try {
+      await api.totpConfirm(totpConfirmCode.trim());
+      setTotpSetupSecret(null);
+      setTotpSetupUri(null);
+      setTotpConfirmCode("");
+      toast.success(t("settings.twoFactorEnabledNotice"));
+      await refreshAuth();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.twoFactorSetupFailed"));
+    } finally {
+      setTotpBusy(false);
+    }
+  }
+
+  async function handleTotpDisable(e: FormEvent) {
+    e.preventDefault();
+    setTotpBusy(true);
+    try {
+      await api.totpDisable(totpDisablePassword);
+      setTotpDisablePassword("");
+      toast.success(t("settings.twoFactorDisabledNotice"));
+      await refreshAuth();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.twoFactorDisableFailed"));
+    } finally {
+      setTotpBusy(false);
+    }
+  }
+
+  async function handleTestNtfy() {
+    if (!values?.ntfy_topic) return;
+    setTestingNtfy(true);
+    try {
+      await api.testNtfy(values.ntfy_server_url, values.ntfy_topic);
+      toast.success(t("settings.ntfyTestSentNotice"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.ntfyTestFailed"));
+    } finally {
+      setTestingNtfy(false);
     }
   }
 
@@ -289,12 +358,17 @@ export function Settings() {
             <div className="flex flex-col divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
               {users.map((u) => (
                 <div key={u.username} className="flex items-center justify-between px-3 py-2 text-sm">
-                  <span className="font-medium">{u.username}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium">{u.username}</span>
+                    <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)]">
+                      {u.role === "admin" ? t("settings.usersRoleAdmin") : t("settings.usersRoleViewer")}
+                    </span>
+                  </span>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={users.length <= 1 || removingUser === u.username}
+                    disabled={isViewer || users.length <= 1 || removingUser === u.username}
                     onClick={() => handleRemoveUser(u.username)}
                   >
                     <Trash2 className="h-3.5 w-3.5" /> {t("settings.usersRemove")}
@@ -304,30 +378,114 @@ export function Settings() {
             </div>
           )}
 
-          <form onSubmit={handleAddUser} className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-end">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <label htmlFor="new_username" className="text-sm font-medium">
-                {t("settings.usersAddUsername")}
-              </label>
-              <Input id="new_username" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} required />
+          <form onSubmit={handleAddUser} className="flex flex-col gap-3 border-t border-[var(--border)] pt-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label htmlFor="new_username" className="text-sm font-medium">
+                  {t("settings.usersAddUsername")}
+                </label>
+                <Input
+                  id="new_username"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  disabled={isViewer}
+                  required
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label htmlFor="new_password" className="text-sm font-medium">
+                  {t("settings.usersAddPassword")}
+                </label>
+                <Input
+                  id="new_password"
+                  type="password"
+                  minLength={8}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={isViewer}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="new_role" className="text-sm font-medium">
+                  {t("settings.usersRole")}
+                </label>
+                <select
+                  id="new_role"
+                  value={newRole}
+                  disabled={isViewer}
+                  onChange={(e) => setNewRole(e.target.value as PanelRole)}
+                  className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] disabled:opacity-40"
+                >
+                  <option value="admin">{t("settings.usersRoleAdmin")}</option>
+                  <option value="viewer">{t("settings.usersRoleViewer")}</option>
+                </select>
+              </div>
             </div>
-            <div className="flex flex-1 flex-col gap-1.5">
-              <label htmlFor="new_password" className="text-sm font-medium">
-                {t("settings.usersAddPassword")}
-              </label>
-              <Input
-                id="new_password"
-                type="password"
-                minLength={8}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" disabled={addingUser}>
+            <Button type="submit" disabled={isViewer || addingUser} className="self-start">
               <UserPlus className="h-4 w-4" /> {addingUser ? t("settings.usersAdding") : t("settings.usersAdd")}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4" /> {t("settings.twoFactor")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-xs text-[var(--muted)]">{t("settings.twoFactorHint")}</p>
+
+          {totpEnabled ? (
+            <form onSubmit={handleTotpDisable} className="flex flex-col gap-3">
+              <p className="text-sm font-medium text-[var(--ok)]">{t("settings.twoFactorEnabled")}</p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  type="password"
+                  placeholder={t("settings.twoFactorDisablePasswordPlaceholder")}
+                  value={totpDisablePassword}
+                  onChange={(e) => setTotpDisablePassword(e.target.value)}
+                  required
+                  className="max-w-xs"
+                />
+                <Button type="submit" variant="outline" disabled={totpBusy}>
+                  {totpBusy ? t("settings.twoFactorDisabling") : t("settings.twoFactorDisable")}
+                </Button>
+              </div>
+            </form>
+          ) : totpSetupSecret && totpSetupUri ? (
+            <form onSubmit={handleTotpConfirm} className="flex flex-col gap-3">
+              <p className="text-xs text-[var(--muted)]">{t("settings.twoFactorSecretHint")}</p>
+              <code className="break-all rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 text-xs">
+                {totpSetupSecret}
+              </code>
+              <code className="break-all rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 text-xs text-[var(--muted)]">
+                {totpSetupUri}
+              </code>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  inputMode="numeric"
+                  placeholder={t("settings.twoFactorConfirmPlaceholder")}
+                  value={totpConfirmCode}
+                  onChange={(e) => setTotpConfirmCode(e.target.value)}
+                  required
+                  className="max-w-xs"
+                />
+                <Button type="submit" disabled={totpBusy}>
+                  {totpBusy ? t("settings.twoFactorConfirming") : t("settings.twoFactorConfirm")}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <p className="text-sm text-[var(--muted)]">{t("settings.twoFactorDisabled")}</p>
+              <Button type="button" onClick={handleTotpSetup} disabled={totpBusy} className="self-start">
+                {t("settings.twoFactorSetup")}
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -434,7 +592,7 @@ export function Settings() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Button type="submit" disabled={saving}>
+                <Button type="submit" disabled={isViewer || saving}>
                   {saving ? t("settings.saving") : t("settings.save")}
                 </Button>
               </div>
@@ -592,7 +750,97 @@ export function Settings() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Button type="submit" disabled={saving}>
+                <Button type="submit" disabled={isViewer || saving}>
+                  {saving ? t("settings.saving") : t("settings.save")}
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Heart className="h-4 w-4" /> {t("settings.heartbeat")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!values ? (
+            <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="heartbeat_url" className="text-sm font-medium">
+                  {t("settings.heartbeatUrlLabel")}
+                </label>
+                <Input
+                  id="heartbeat_url"
+                  placeholder="https://healthchecks.io/ping/..."
+                  value={values.heartbeat_url}
+                  onChange={(e) => setValues({ ...values, heartbeat_url: e.target.value })}
+                  disabled={isViewer}
+                />
+                <p className="text-xs text-[var(--muted)]">{t("settings.heartbeatHint")}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={isViewer || saving}>
+                  {saving ? t("settings.saving") : t("settings.save")}
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-4 w-4" /> {t("settings.ntfy")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!values ? (
+            <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <p className="text-xs text-[var(--muted)]">{t("settings.ntfyHint")}</p>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="ntfy_server_url" className="text-sm font-medium">
+                  {t("settings.ntfyServerLabel")}
+                </label>
+                <Input
+                  id="ntfy_server_url"
+                  value={values.ntfy_server_url}
+                  onChange={(e) => setValues({ ...values, ntfy_server_url: e.target.value })}
+                  disabled={isViewer}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="ntfy_topic" className="text-sm font-medium">
+                  {t("settings.ntfyTopicLabel")}
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="ntfy_topic"
+                    value={values.ntfy_topic}
+                    onChange={(e) => setValues({ ...values, ntfy_topic: e.target.value })}
+                    disabled={isViewer}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!values.ntfy_topic || testingNtfy}
+                    onClick={handleTestNtfy}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    {testingNtfy ? t("settings.ntfyTesting") : t("settings.ntfyTest")}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={isViewer || saving}>
                   {saving ? t("settings.saving") : t("settings.save")}
                 </Button>
               </div>
@@ -674,7 +922,7 @@ export function Settings() {
               </label>
               <p className="text-xs text-[var(--muted)]">{t("settings.publicDisplayHint")}</p>
               <div className="flex items-center gap-2">
-                <Button type="button" disabled={savingDisplayToggle} onClick={handleSaveDisplayToggle}>
+                <Button type="button" disabled={isViewer || savingDisplayToggle} onClick={handleSaveDisplayToggle}>
                   {savingDisplayToggle ? t("settings.saving") : t("settings.publicDisplaySave")}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => window.open("/display", "_blank")}>

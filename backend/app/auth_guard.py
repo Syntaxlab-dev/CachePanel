@@ -22,6 +22,17 @@ logged in as it. Once an account exists, this path goes back to requiring
 normal auth like any other -- restoring over a live, already-configured
 panel still needs a valid session, so an unauthenticated caller can't use
 this to hijack or wipe someone else's panel.
+
+Since the 3rd feature round, an authenticated session also carries a
+`role` ("admin" | "viewer", set at login/setup -- see routers/auth.py).
+A "viewer" session is blocked from every non-read /api/ request with a 403,
+enforced centrally here rather than per-route: the whole point of a
+read-only role is that it's safe by construction, not dependent on every
+current and future router remembering to add its own check. GET/HEAD/OPTIONS
+requests are the only methods that pass through for a viewer -- everything
+that mutates state (POST/PUT/PATCH/DELETE) is blocked regardless of path.
+/api/auth/* stays fully exempt as before (a viewer must still be able to
+log out, and the /totp/* endpoints there do their own session check).
 """
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -32,6 +43,7 @@ from app.services import auth_credentials_store
 
 _EXEMPT_PREFIX = "/api/auth/"
 _SETUP_EXEMPT_PATHS = {"/api/backup/restore"}
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 class AuthGuardMiddleware(BaseHTTPMiddleware):
@@ -51,5 +63,8 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
 
         if not request.session.get("authenticated"):
             return JSONResponse({"detail": "not_authenticated"}, status_code=401)
+
+        if request.session.get("role") == "viewer" and request.method not in _SAFE_METHODS:
+            return JSONResponse({"detail": "read_only"}, status_code=403)
 
         return await call_next(request)
