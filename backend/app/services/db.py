@@ -84,6 +84,19 @@ _SCHEMA_STATEMENTS = [
         label TEXT NOT NULL
     )
     """,
+    # Daily "records" snapshot (3rd feature round, Welle 4) -- see
+    # records_store.py. Single fixed row (id=1), same shape as
+    # app_settings' one-row table, not an open-ended key space.
+    """
+    CREATE TABLE IF NOT EXISTS records (
+        id SMALLINT PRIMARY KEY DEFAULT 1,
+        most_bandwidth_saved_bytes BIGINT NOT NULL DEFAULT 0,
+        most_bandwidth_saved_date TEXT,
+        highest_hit_ratio REAL NOT NULL DEFAULT 0,
+        highest_hit_ratio_date TEXT,
+        CONSTRAINT records_single_row CHECK (id = 1)
+    )
+    """,
 ]
 
 # Run unconditionally, after _SCHEMA_STATEMENTS, on every startup -- each

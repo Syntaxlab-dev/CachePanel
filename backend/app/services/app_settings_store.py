@@ -71,6 +71,11 @@ _DEFAULTS = {
     # ~24h of log tail) applied to every service independently; 0 = off,
     # same "0/blank = off" contract as every other optional field here.
     "traffic_alert_threshold_gb": 0.0,
+    # Optional custom title shown on the public /display screen (see
+    # routers/public_display.py) -- blank means the frontend just shows
+    # its own default "CachePanel" title, same "blank = default" contract
+    # as everywhere else in this file.
+    "display_party_name": "",
 }
 
 

@@ -89,6 +89,7 @@ export interface AppSettings {
   auto_backup_retention: number;
   auto_clean_corruption_enabled: boolean;
   traffic_alert_threshold_gb: number;
+  display_party_name: string;
 }
 
 export interface ApiToken {
@@ -131,6 +132,7 @@ export type TrafficWindow = "24h" | "7d" | "30d";
 // is allowed to contain; deliberately narrower than DashboardStats, e.g.
 // no top_clients).
 export interface PublicDisplayData {
+  party_name: string;
   overall: {
     total_requests: number;
     hit_ratio: number;
@@ -148,6 +150,12 @@ export interface PublicDisplayData {
     growth_bytes_per_day: number | null;
   };
   ready_counts: { steam: number; battlenet: number; epic: number };
+  records: {
+    most_bandwidth_saved_bytes: number;
+    most_bandwidth_saved_date: string | null;
+    highest_hit_ratio: number;
+    highest_hit_ratio_date: string | null;
+  };
 }
 
 export interface VersionInfo {

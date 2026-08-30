@@ -31,6 +31,7 @@ class SettingsUpdate(BaseModel):
     auto_backup_retention: int | None = None
     auto_clean_corruption_enabled: bool | None = None
     traffic_alert_threshold_gb: float | None = None
+    display_party_name: str | None = None
 
 
 class NotificationTestRequest(BaseModel):

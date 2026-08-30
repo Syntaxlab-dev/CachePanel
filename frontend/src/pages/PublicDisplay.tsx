@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Database, Gauge, HardDrive, Server, Sparkles } from "lucide-react";
+import { Database, Gauge, HardDrive, Server, Sparkles, Trophy } from "lucide-react";
 import { TrafficChart } from "@/components/TrafficChart";
 import { fetchPublicDisplayData, type PublicDisplayData } from "@/lib/api";
 import { formatBytes, formatDaysApprox, formatPercent } from "@/lib/utils";
@@ -25,7 +25,8 @@ const ACCENT = "#7dd3fc"; // sky-300
 const WARN = "#fbbf24"; // amber-400
 
 export function PublicDisplay() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const locale = lang === "de" ? "de-DE" : "en-US";
   const [data, setData] = useState<PublicDisplayData | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -85,8 +86,10 @@ export function PublicDisplay() {
           <Database className="h-7 w-7" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("display.title")}</h1>
-          <p className="text-sm text-slate-500">{t("display.subtitle")}</p>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            {data.party_name || t("display.title")}
+          </h1>
+          <p className="text-sm text-slate-500">{data.party_name ? t("display.title") : t("display.subtitle")}</p>
         </div>
       </header>
 
@@ -195,6 +198,40 @@ export function PublicDisplay() {
           ) : (
             <p className="text-sm text-slate-500">{t("display.forecastUnavailable")}</p>
           )}
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-slate-500">
+          <Trophy className="h-4 w-4" /> {t("display.records")}
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-xs text-slate-500">{t("display.recordBandwidth")}</p>
+            {data.records.most_bandwidth_saved_date ? (
+              <p className="text-lg font-semibold text-slate-100">
+                {formatBytes(data.records.most_bandwidth_saved_bytes)}
+                <span className="ml-2 text-sm font-normal text-slate-500">
+                  {new Date(data.records.most_bandwidth_saved_date).toLocaleDateString(locale)}
+                </span>
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">{t("display.recordsNotYet")}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-slate-500">{t("display.recordHitRatio")}</p>
+            {data.records.highest_hit_ratio_date ? (
+              <p className="text-lg font-semibold text-slate-100">
+                {formatPercent(data.records.highest_hit_ratio)}
+                <span className="ml-2 text-sm font-normal text-slate-500">
+                  {new Date(data.records.highest_hit_ratio_date).toLocaleDateString(locale)}
+                </span>
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">{t("display.recordsNotYet")}</p>
+            )}
+          </div>
         </div>
       </div>
 

@@ -12,6 +12,7 @@ instead of accumulating duplicate jobs.
 """
 
 import logging
+from datetime import datetime
 
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -24,6 +25,7 @@ from app.services import (
     cache_report,
     discord_notifier,
     ntfy_notifier,
+    records_store,
     schedule_store,
 )
 from app.services.cache_manager import CacheManagerError
@@ -53,6 +55,12 @@ _AUTO_CLEANUP_INTERVAL_MINUTES = 360
 _TRAFFIC_ALERT_JOB_ID = "traffic-alert-check"
 _TRAFFIC_ALERT_INTERVAL_MINUTES = 30
 _BYTES_PER_GB = 1024**3
+
+_RECORDS_SNAPSHOT_JOB_ID = "daily-records-snapshot"
+# Below this many requests in a day, a hit-ratio "record" would be
+# meaningless noise -- a quiet early morning with 2 requests and a lucky
+# 100% shouldn't be able to "win" the all-time high-ratio record.
+_RECORDS_MIN_REQUESTS_FOR_HIT_RATIO = 50
 
 # Tracks whether a disk-warning notification has already fired for the
 # *current* above-threshold spell, so a still-full disk doesn't re-notify
@@ -208,6 +216,34 @@ def _check_traffic_alert() -> None:
             _traffic_alert_active.pop(service, None)
 
 
+def _run_daily_records_snapshot() -> None:
+    """Once a day (see start_and_reload()'s fixed 23:55 CronTrigger --
+    unlike the other jobs in this file, this one isn't settings-driven, so
+    it has no reload_*_job() counterpart), takes today's cumulative stats
+    from the current log tail and updates records_store.py's two records
+    if today set a new high. See records_store.py's own docstring for the
+    honest caveat about what "today's total" means when it's read from a
+    bounded log tail rather than a real per-day counter."""
+    access_path = settings.lancache_log_dir / "access.log"
+    entries = iter_access_entries(access_path, max_lines=100_000)
+
+    today = datetime.now().astimezone().date()
+    todays_entries = [e for e in entries if e.timestamp.date() == today]
+    if not todays_entries:
+        return
+
+    stats_by_service = aggregate_service_stats(todays_entries)
+    total_hit_bytes = sum(s.hit_bytes for s in stats_by_service.values())
+    total_hit_count = sum(s.hit_count for s in stats_by_service.values())
+    total_miss_count = sum(s.miss_count for s in stats_by_service.values())
+    total_requests = total_hit_count + total_miss_count
+
+    date_str = today.isoformat()
+    records_store.record_bandwidth_saved(total_hit_bytes, date_str)
+    if total_requests >= _RECORDS_MIN_REQUESTS_FOR_HIT_RATIO:
+        records_store.record_hit_ratio(total_hit_count / total_requests, date_str)
+
+
 def reload_report_job() -> None:
     """Removes and re-adds the weekly report job with the current settings'
     weekday/hour/minute -- same remove-then-add pattern as reload_jobs()
@@ -301,6 +337,12 @@ def start_and_reload() -> None:
         trigger="interval",
         minutes=_TRAFFIC_ALERT_INTERVAL_MINUTES,
         id=_TRAFFIC_ALERT_JOB_ID,
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _run_daily_records_snapshot,
+        trigger=CronTrigger(hour=23, minute=55),
+        id=_RECORDS_SNAPSHOT_JOB_ID,
         replace_existing=True,
     )
 

@@ -21,12 +21,17 @@ Also fails closed: unless an admin has explicitly turned
 response whether the feature is off or the path is simply wrong, so an
 unauthenticated prober learns nothing about the panel's configuration
 either way.
+
+Since the 3rd feature round (Welle 4) this also carries `party_name` (an
+optional free-text label an admin typed into Settings for this specific
+screen -- not a secret, the admin chose it to be shown here) and
+`records` (the two all-time daily records from records_store.py).
 """
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from app.services import app_settings_store, prefill_selection
+from app.services import app_settings_store, prefill_selection, records_store
 from app.services.cache_forecast import compute_forecast
 from app.services.cache_manager import CacheManagerError, get_disk_usage
 from app.services.log_parser import TRAFFIC_WINDOWS, aggregate_service_stats, iter_access_entries, traffic_timeline
@@ -99,7 +104,10 @@ def get_display_data():
         "epic": len(prefill_selection.read_selection(settings.epic_prefill_config_dir)),
     }
 
+    records = records_store.get_records()
+
     return {
+        "party_name": cfg.get("display_party_name") or "",
         "overall": {
             "total_requests": total_requests,
             "hit_ratio": round(total_hit_count / total_requests, 4) if total_requests else 0.0,
@@ -117,4 +125,10 @@ def get_display_data():
             "growth_bytes_per_day": forecast.growth_bytes_per_day,
         },
         "ready_counts": ready_counts,
+        "records": {
+            "most_bandwidth_saved_bytes": records["most_bandwidth_saved_bytes"],
+            "most_bandwidth_saved_date": records["most_bandwidth_saved_date"],
+            "highest_hit_ratio": records["highest_hit_ratio"],
+            "highest_hit_ratio_date": records["highest_hit_ratio_date"],
+        },
     }

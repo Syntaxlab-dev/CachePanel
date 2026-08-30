@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, ExternalLink, Heart, Home, Image, Info, KeyRound, LogIn, Palette, Send, ShieldCheck, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
+import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, ExternalLink, Heart, Home, Image, Info, KeyRound, LogIn, Palette, Send, Share2, ShieldCheck, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,8 @@ export function Settings() {
   const [creatingToken, setCreatingToken] = useState(false);
   const [justCreatedToken, setJustCreatedToken] = useState<string | null>(null);
   const [deletingTokenId, setDeletingTokenId] = useState<number | null>(null);
+  const [pendingShareBundle, setPendingShareBundle] = useState<ExportBundle | null>(null);
+  const [applyingShareBundle, setApplyingShareBundle] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const backupFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -81,6 +83,24 @@ export function Settings() {
       setLoginNotice(loginResult);
       window.history.replaceState({}, "", "/settings");
     }
+
+    // A friend's "share as link" button (see handleShareAsLink below)
+    // base64-encodes the same ExportBundle shape GET /api/export already
+    // returns into this query param -- decoded here into a pending-review
+    // state, NEVER applied automatically just because the link was opened
+    // (see the confirm/dismiss banner rendered from pendingShareBundle).
+    const shared = params.get("share");
+    if (shared) {
+      try {
+        const json = decodeURIComponent(escape(atob(shared)));
+        const bundle = JSON.parse(json) as ExportBundle;
+        setPendingShareBundle(bundle);
+      } catch {
+        toast.error(t("settings.shareLinkInvalid"));
+      }
+      window.history.replaceState({}, "", "/settings");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Separate from the effect above -- myRole isn't known yet on first
@@ -294,6 +314,40 @@ export function Settings() {
     }
   }
 
+  async function handleShareAsLink() {
+    try {
+      const bundle = await api.exportSelection();
+      // unescape/encodeURIComponent round-trip so btoa (which only
+      // accepts Latin1) doesn't throw on a manually-entered Epic app name
+      // with e.g. an umlaut in it -- see handleApplyShareBundle's mirrored
+      // decode below.
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(bundle))));
+      const url = `${window.location.origin}/settings?share=${encoded}`;
+      await navigator.clipboard.writeText(url);
+      toast.success(t("settings.shareLinkCopied"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.shareLinkFailed"));
+    }
+  }
+
+  async function handleApplyShareBundle() {
+    if (!pendingShareBundle) return;
+    setApplyingShareBundle(true);
+    try {
+      await api.importSelection(pendingShareBundle);
+      toast.success(t("settings.importedNotice"));
+      setPendingShareBundle(null);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `${t("settings.importFailedWithMsgPrefix")} ${err.message}`
+          : t("settings.importFailedGeneric"),
+      );
+    } finally {
+      setApplyingShareBundle(false);
+    }
+  }
+
   async function handleTestWebhook() {
     if (!values?.discord_webhook_url) return;
     setTestingWebhook(true);
@@ -324,7 +378,10 @@ export function Settings() {
     if (!values) return;
     setSavingDisplayToggle(true);
     try {
-      const updated = await api.saveSettings({ public_display_enabled: values.public_display_enabled });
+      const updated = await api.saveSettings({
+        public_display_enabled: values.public_display_enabled,
+        display_party_name: values.display_party_name,
+      });
       setValues(updated);
       toast.success(t("settings.publicDisplaySaved"));
     } catch (err) {
@@ -1185,6 +1242,9 @@ export function Settings() {
             <Button type="button" variant="outline" onClick={handleImportClick} disabled={importing}>
               <Upload className="h-4 w-4" /> {importing ? t("settings.importing") : t("settings.import")}
             </Button>
+            <Button type="button" variant="outline" onClick={handleShareAsLink}>
+              <Share2 className="h-4 w-4" /> {t("settings.shareAsLink")}
+            </Button>
             <input
               ref={fileInputRef}
               type="file"
@@ -1195,6 +1255,34 @@ export function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      {pendingShareBundle && (
+        <Card className="border-[var(--accent)]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Share2 className="h-4 w-4" /> {t("settings.shareLinkPromptTitle")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-sm text-[var(--muted)]">{t("settings.shareLinkPromptBody")}</p>
+            <p className="text-sm">
+              {pendingShareBundle.steam_app_ids.length} {t("settings.shareLinkSteamCount")}
+              {" · "}
+              {pendingShareBundle.battlenet_codes.length} {t("settings.shareLinkBattlenetCount")}
+              {" · "}
+              {pendingShareBundle.epic_app_ids.length} {t("settings.shareLinkEpicCount")}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button type="button" disabled={isViewer || applyingShareBundle} onClick={handleApplyShareBundle}>
+                {applyingShareBundle ? t("settings.importing") : t("settings.shareLinkApply")}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setPendingShareBundle(null)}>
+                {t("settings.shareLinkDismiss")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -1242,6 +1330,18 @@ export function Settings() {
                 {t("settings.publicDisplayEnabled")}
               </label>
               <p className="text-xs text-[var(--muted)]">{t("settings.publicDisplayHint")}</p>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="display_party_name" className="text-sm font-medium">
+                  {t("settings.publicDisplayPartyName")}
+                </label>
+                <Input
+                  id="display_party_name"
+                  value={values.display_party_name}
+                  onChange={(e) => setValues({ ...values, display_party_name: e.target.value })}
+                  placeholder={t("settings.publicDisplayPartyNamePlaceholder")}
+                />
+                <p className="text-xs text-[var(--muted)]">{t("settings.publicDisplayPartyNameHint")}</p>
+              </div>
               <div className="flex items-center gap-2">
                 <Button type="button" disabled={isViewer || savingDisplayToggle} onClick={handleSaveDisplayToggle}>
                   {savingDisplayToggle ? t("settings.saving") : t("settings.publicDisplaySave")}
