@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query
 
+from app.services import daily_stats_store
 from app.services.log_parser import (
     TRAFFIC_WINDOWS,
     aggregate_service_stats,
@@ -80,3 +81,14 @@ def get_live_ticker():
     access_path = settings.lancache_log_dir / "access.log"
     entries = iter_access_entries(access_path, max_lines=5_000)
     return {"entries": recent_entries(entries)}
+
+
+@router.get(
+    "/trends",
+    summary="Long-term daily traffic trends",
+    description="Day-by-day totals from daily_stats_store.py's history, most recent `days` days (default 30, "
+    "capped at 365). Data only exists from whenever the daily snapshot job started running -- a fresh "
+    "install (or a recently upgraded one) returns fewer days than requested, possibly none yet.",
+)
+def get_trends(days: int = Query(30, ge=1, le=365)):
+    return {"days": daily_stats_store.get_range(days)}

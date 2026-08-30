@@ -106,6 +106,13 @@ export interface LiveTickerEntry {
   cache_status: string;
 }
 
+export interface DailyStat {
+  date: string;
+  hit_bytes: number;
+  miss_bytes: number;
+  total_requests: number;
+}
+
 export interface HaSensors {
   hit_ratio_percent: number;
   bandwidth_saved_gb: number;
@@ -378,7 +385,16 @@ export const api = {
   deleteToken: (id: number) => request<{ ok: boolean }>(`/api/tokens/${id}`, { method: "DELETE" }),
 
   liveTicker: () => request<{ entries: LiveTickerEntry[] }>("/api/dashboard/live-ticker"),
+  trends: (days: number = 30) => request<{ days: DailyStat[] }>(`/api/dashboard/trends?days=${days}`),
   haSensors: () => request<HaSensors>("/api/ha/sensors"),
+
+  webpushVapidPublicKey: () => request<{ public_key: string }>("/api/webpush/vapid-public-key"),
+  webpushSubscribe: (subscription: unknown) =>
+    request<{ ok: boolean }>("/api/webpush/subscribe", { method: "POST", body: JSON.stringify({ subscription }) }),
+  webpushUnsubscribe: (endpoint: string) =>
+    request<{ ok: boolean }>("/api/webpush/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) }),
+  webpushTest: () =>
+    request<{ message: string; subscriber_count: number }>("/api/webpush/test", { method: "POST" }),
 
   clientLabels: () => request<{ labels: Record<string, string> }>("/api/client-labels"),
   setClientLabel: (ip: string, label: string) =>

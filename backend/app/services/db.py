@@ -97,6 +97,29 @@ _SCHEMA_STATEMENTS = [
         CONSTRAINT records_single_row CHECK (id = 1)
     )
     """,
+    # Day-by-day traffic history for the long-term trends chart (3rd
+    # feature round, Welle 5) -- see daily_stats_store.py. A genuinely
+    # growing time series (one row per day), unlike the fixed-shape
+    # `records` table above.
+    """
+    CREATE TABLE IF NOT EXISTS daily_stats (
+        date TEXT PRIMARY KEY,
+        hit_bytes BIGINT NOT NULL DEFAULT 0,
+        miss_bytes BIGINT NOT NULL DEFAULT 0,
+        total_requests INTEGER NOT NULL DEFAULT 0
+    )
+    """,
+    # Browser Push API subscriptions (3rd feature round, Welle 5) -- see
+    # webpush_subscriptions_store.py. subscription_json is the whole
+    # PushSubscription.toJSON() blob as one TEXT column (not decomposed
+    # into columns) since this store never needs to query into it, only
+    # round-trip it back to pywebpush.webpush() unmodified.
+    """
+    CREATE TABLE IF NOT EXISTS webpush_subscriptions (
+        endpoint TEXT PRIMARY KEY,
+        subscription_json TEXT NOT NULL
+    )
+    """,
 ]
 
 # Run unconditionally, after _SCHEMA_STATEMENTS, on every startup -- each

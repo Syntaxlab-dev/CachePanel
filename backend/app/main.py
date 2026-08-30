@@ -28,6 +28,7 @@ from app.routers import (
     steam,
     steam_size,
     users,
+    webpush,
 )
 from app.services import db, scheduler_service, session_secret
 
@@ -86,6 +87,7 @@ app.include_router(public_display.router)
 app.include_router(api_tokens.router)
 app.include_router(client_labels.router)
 app.include_router(ha.router)
+app.include_router(webpush.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 

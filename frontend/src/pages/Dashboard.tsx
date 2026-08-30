@@ -22,6 +22,7 @@ import {
   Server,
   Settings2,
   Trash2,
+  TrendingUp,
   Users,
   XCircle,
 } from "lucide-react";
@@ -31,11 +32,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TrafficChart } from "@/components/TrafficChart";
+import { TrendsChart } from "@/components/TrendsChart";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 import {
   api,
   type CacheForecast,
   type CacheScanResult,
+  type DailyStat,
   type DashboardStats,
   type DiagnosticCheck,
   type HealthStatus,
@@ -53,6 +56,8 @@ import { setDiagnosticsBadge, clearDiagnosticsBadge } from "@/lib/diagnosticsBad
 const AUTO_REFRESH_KEY = "cachepanel-dashboard-autorefresh";
 const AUTO_REFRESH_INTERVAL_MS = 30_000;
 const TRAFFIC_WINDOWS: TrafficWindow[] = ["24h", "7d", "30d"];
+const TRENDS_RANGES = [30, 90, 365] as const;
+type TrendsRange = (typeof TRENDS_RANGES)[number];
 
 function getStoredAutoRefresh(): boolean {
   try {
@@ -89,6 +94,8 @@ export function Dashboard() {
   const [autoRefresh, setAutoRefresh] = useState(() => getStoredAutoRefresh());
   const [historySearch, setHistorySearch] = useState("");
   const [liveTicker, setLiveTicker] = useState<LiveTickerEntry[] | null>(null);
+  const [trends, setTrends] = useState<DailyStat[] | null>(null);
+  const [trendsRange, setTrendsRange] = useState<TrendsRange>(30);
   const [clientLabels, setClientLabels] = useState<Record<string, string>>({});
   const [editingClientIp, setEditingClientIp] = useState<string | null>(null);
   const [clientLabelDraft, setClientLabelDraft] = useState("");
@@ -142,6 +149,17 @@ export function Dashboard() {
     const id = setInterval(loadTicker, 10_000);
     return () => clearInterval(id);
   }, []);
+
+  // Independent of the main dashboard refresh -- daily totals only ever
+  // change once a day (see scheduler_service.py's 23:55 snapshot job), so
+  // this just needs to reload when the user picks a different range, not
+  // on any polling cadence.
+  useEffect(() => {
+    api
+      .trends(trendsRange)
+      .then((data) => setTrends(data.days))
+      .catch(() => setTrends(null));
+  }, [trendsRange]);
 
   // Auto-refresh: paused while the user is actively rearranging tiles in
   // "Anpassen" mode (a refresh mid-drag wouldn't lose the layout itself --
@@ -522,6 +540,48 @@ export function Dashboard() {
                   </div>
                 ))}
               </div>
+            )}
+          </CardContent>
+        </Card>
+      ),
+    };
+  }
+
+  {
+    const enoughData = (trends?.length ?? 0) >= 2;
+    widgetDefs.trends = {
+      title: t("dashboard.trends"),
+      node: (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> {t("dashboard.trends")}
+            </CardTitle>
+            <div className="flex gap-1">
+              {TRENDS_RANGES.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setTrendsRange(r)}
+                  className={cn(
+                    "rounded-md px-2 py-1 text-xs font-medium",
+                    trendsRange === r
+                      ? "bg-[var(--accent)] text-[var(--accent-ink)]"
+                      : "text-[var(--muted)] hover:bg-[var(--surface-2)]",
+                  )}
+                >
+                  {t(`dashboard.trends.range.${r}` as const)}
+                </button>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {trends === null ? (
+              <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+            ) : !enoughData ? (
+              <p className="text-sm text-[var(--muted)]">{t("dashboard.trendsCollecting")}</p>
+            ) : (
+              <TrendsChart data={trends} />
             )}
           </CardContent>
         </Card>

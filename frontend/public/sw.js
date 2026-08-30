@@ -37,3 +37,38 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(request).then((cached) => cached ?? caches.match("/"))),
   );
 });
+
+// Web Push (see backend/app/services/webpush_notifier.py): the payload is
+// plain JSON ({"title", "body"}, see that module's _send_to_all()), not an
+// arbitrary/untrusted shape -- still falls back to a generic notification
+// if it's ever missing or malformed rather than throwing, since a broken
+// push handler would silently drop every future notification for this
+// device until the service worker is somehow re-registered.
+self.addEventListener("push", (event) => {
+  let title = "CachePanel";
+  let body = "";
+  try {
+    const payload = event.data ? event.data.json() : {};
+    title = payload.title || title;
+    body = payload.body || "";
+  } catch {
+    body = event.data ? event.data.text() : "";
+  }
+  event.waitUntil(self.registration.showNotification(title, { body, icon: "/icon-192.png" }));
+});
+
+// Clicking the notification focuses an already-open CachePanel tab if one
+// exists, otherwise opens a new one -- standard PWA notification-click
+// pattern, avoids piling up duplicate tabs for someone who already has the
+// dashboard open when a push arrives.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) return client.focus();
+      }
+      return self.clients.openWindow("/");
+    }),
+  );
+});

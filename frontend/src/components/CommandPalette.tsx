@@ -61,6 +61,7 @@ export function CommandPalette() {
       { id: "section-notifications", label: t("settings.notifications"), keywords: "discord webhook alerts" },
       { id: "section-heartbeat", label: t("settings.heartbeat"), keywords: "heartbeat uptime healthchecks" },
       { id: "section-ntfy", label: t("settings.ntfy"), keywords: "ntfy notifications" },
+      { id: "section-webpush", label: t("settings.webpush"), keywords: "web push notifications browser pwa" },
       { id: "section-autobackup", label: t("settings.autoBackup"), keywords: "backup schedule automatic" },
       { id: "section-autocleanup", label: t("settings.autoCleanup"), keywords: "cleanup corruption" },
       ...(isAdmin

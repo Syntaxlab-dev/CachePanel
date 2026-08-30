@@ -23,10 +23,13 @@ from app.services import (
     backup_builder,
     cache_manager,
     cache_report,
+    daily_stats_store,
     discord_notifier,
     ntfy_notifier,
     records_store,
     schedule_store,
+    webpush_notifier,
+    webpush_subscriptions_store,
 )
 from app.services.cache_manager import CacheManagerError
 from app.services.log_parser import aggregate_service_stats, iter_access_entries
@@ -86,7 +89,12 @@ def _check_disk_warning() -> None:
     cfg = app_settings_store.get_settings()
     webhook_url = cfg.get("discord_webhook_url") or ""
     ntfy_topic = cfg.get("ntfy_topic") or ""
-    if not cfg.get("discord_notify_disk_warning") or (not webhook_url and not ntfy_topic):
+    # Web push has no URL/topic to configure (see webpush_notifier.py --
+    # it's per-device, opted into from Settings) -- whether any device is
+    # currently subscribed is the only thing that decides if this channel
+    # counts as "configured" for the early-exit below.
+    has_webpush = bool(webpush_subscriptions_store.list_subscriptions())
+    if not cfg.get("discord_notify_disk_warning") or (not webhook_url and not ntfy_topic and not has_webpush):
         return
 
     try:
@@ -101,6 +109,7 @@ def _check_disk_warning() -> None:
                 discord_notifier.notify_disk_warning(webhook_url, usage.percent_used)
             if ntfy_topic:
                 ntfy_notifier.notify_disk_warning(cfg.get("ntfy_server_url") or "", ntfy_topic, usage.percent_used)
+            webpush_notifier.notify_disk_warning(usage.percent_used)
             _disk_warning_active = True
     else:
         _disk_warning_active = False
@@ -122,18 +131,28 @@ def _ping_heartbeat() -> None:
 
 def _send_cache_report() -> None:
     cfg = app_settings_store.get_settings()
-    webhook_url = cfg.get("discord_webhook_url") or ""
-    if not webhook_url or not cfg.get("report_enabled"):
+    if not cfg.get("report_enabled"):
         return
 
     summary = cache_report.build_report()
-    discord_notifier.notify_cache_report(
-        webhook_url,
+
+    webhook_url = cfg.get("discord_webhook_url") or ""
+    if webhook_url:
+        discord_notifier.notify_cache_report(
+            webhook_url,
+            total_requests=summary["total_requests"],
+            hit_ratio=summary["hit_ratio"],
+            bandwidth_saved_bytes=summary["bandwidth_saved_bytes"],
+            percent_used=summary["percent_used"],
+            hours_until_full=summary["hours_until_full"],
+        )
+    # Web push report is intentionally simpler (no disk/forecast line) --
+    # see webpush_notifier.notify_cache_report()'s own signature; a no-op
+    # if no device is subscribed.
+    webpush_notifier.notify_cache_report(
         total_requests=summary["total_requests"],
         hit_ratio=summary["hit_ratio"],
-        bandwidth_saved_bytes=summary["bandwidth_saved_bytes"],
-        percent_used=summary["percent_used"],
-        hours_until_full=summary["hours_until_full"],
+        bandwidth_saved_gb=summary["bandwidth_saved_bytes"] / _BYTES_PER_GB,
     )
 
 
@@ -172,6 +191,7 @@ def _run_auto_cleanup_check() -> None:
         discord_notifier.notify_auto_cleanup(webhook_url, scan.corrupt_file_count)
     if ntfy_topic:
         ntfy_notifier.notify_auto_cleanup(cfg.get("ntfy_server_url") or "", ntfy_topic, scan.corrupt_file_count)
+    webpush_notifier.notify_auto_cleanup(scan.corrupt_file_count)
 
 
 def _check_traffic_alert() -> None:
@@ -183,7 +203,8 @@ def _check_traffic_alert() -> None:
 
     webhook_url = cfg.get("discord_webhook_url") or ""
     ntfy_topic = cfg.get("ntfy_topic") or ""
-    if not webhook_url and not ntfy_topic:
+    has_webpush = bool(webpush_subscriptions_store.list_subscriptions())
+    if not webhook_url and not ntfy_topic and not has_webpush:
         return
 
     access_path = settings.lancache_log_dir / "access.log"
@@ -204,6 +225,7 @@ def _check_traffic_alert() -> None:
                     ntfy_notifier.notify_traffic_alert(
                         cfg.get("ntfy_server_url") or "", ntfy_topic, service, gb_used, threshold_gb
                     )
+                webpush_notifier.notify_traffic_alert(service, gb_used, threshold_gb)
                 _traffic_alert_active[service] = True
         else:
             _traffic_alert_active[service] = False
@@ -220,10 +242,13 @@ def _run_daily_records_snapshot() -> None:
     """Once a day (see start_and_reload()'s fixed 23:55 CronTrigger --
     unlike the other jobs in this file, this one isn't settings-driven, so
     it has no reload_*_job() counterpart), takes today's cumulative stats
-    from the current log tail and updates records_store.py's two records
-    if today set a new high. See records_store.py's own docstring for the
-    honest caveat about what "today's total" means when it's read from a
-    bounded log tail rather than a real per-day counter."""
+    from the current log tail and (a) updates records_store.py's two
+    records if today set a new high, and (b) appends today's row to
+    daily_stats_store.py's long-term trend history. Both reuse the same
+    single log-tail read/aggregation below rather than each doing their
+    own -- see records_store.py's and daily_stats_store.py's own docstrings
+    for the honest caveat about what "today's total" means when it's read
+    from a bounded log tail rather than a real per-day counter."""
     access_path = settings.lancache_log_dir / "access.log"
     entries = iter_access_entries(access_path, max_lines=100_000)
 
@@ -234,6 +259,7 @@ def _run_daily_records_snapshot() -> None:
 
     stats_by_service = aggregate_service_stats(todays_entries)
     total_hit_bytes = sum(s.hit_bytes for s in stats_by_service.values())
+    total_miss_bytes = sum(s.miss_bytes for s in stats_by_service.values())
     total_hit_count = sum(s.hit_count for s in stats_by_service.values())
     total_miss_count = sum(s.miss_count for s in stats_by_service.values())
     total_requests = total_hit_count + total_miss_count
@@ -242,6 +268,8 @@ def _run_daily_records_snapshot() -> None:
     records_store.record_bandwidth_saved(total_hit_bytes, date_str)
     if total_requests >= _RECORDS_MIN_REQUESTS_FOR_HIT_RATIO:
         records_store.record_hit_ratio(total_hit_count / total_requests, date_str)
+
+    daily_stats_store.record_day(date_str, total_hit_bytes, total_miss_bytes, total_requests)
 
 
 def reload_report_job() -> None:

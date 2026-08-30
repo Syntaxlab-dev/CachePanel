@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import docker
 from docker.errors import DockerException, NotFound
 
-from app.services import app_settings_store, discord_notifier, ntfy_notifier, run_history_store
+from app.services import app_settings_store, discord_notifier, ntfy_notifier, run_history_store, webpush_notifier
 from app.settings import settings
 
 PREFILL_COMMANDS: dict[str, tuple[str, list[str]]] = {
@@ -34,12 +34,18 @@ class PrefillRunnerError(RuntimeError):
 
 
 def _notify_run_result(service: str, exit_code: int, duration_seconds: float) -> None:
-    """Fires the configured Discord AND ntfy notifications for a finished
-    run, if any -- covers both manual (trigger_prefill) and scheduled (via
-    scheduler_service, which also calls trigger_prefill) runs, plus the SSE
-    live-log path (stream_prefill) below. Each channel is independent (one
-    can be on while the other is off) and never raises: a webhook/ntfy
-    failure must not turn a successful/failed prefill run into a 500."""
+    """Fires the configured Discord, ntfy, AND web-push notifications for a
+    finished run, if any -- covers both manual (trigger_prefill) and
+    scheduled (via scheduler_service, which also calls trigger_prefill)
+    runs, plus the SSE live-log path (stream_prefill) below. Each channel
+    is independent (any combination can be on/off) and never raises: a
+    webhook/ntfy/push failure must not turn a successful/failed prefill
+    run into a 500. Web push has no per-device on/off setting of its own
+    (unlike Discord/ntfy's success/failure toggles) -- subscribing a
+    device at all in Settings implies wanting these events, same
+    success/failure gating as the other two channels reuses
+    discord_notify_success/_failure so there's still just one on/off pair
+    to configure, not three."""
     cfg = app_settings_store.get_settings()
 
     try:
@@ -62,6 +68,14 @@ def _notify_run_result(service: str, exit_code: int, duration_seconds: float) ->
                 ntfy_notifier.notify_prefill_failure(ntfy_server, ntfy_topic, service, exit_code)
     except Exception:
         logging.getLogger("cachepanel.ntfy").exception("Failed to send prefill-result notification")
+
+    try:
+        if exit_code == 0 and cfg.get("discord_notify_success"):
+            webpush_notifier.notify_prefill_success(service, duration_seconds)
+        elif exit_code != 0 and cfg.get("discord_notify_failure"):
+            webpush_notifier.notify_prefill_failure(service, exit_code)
+    except Exception:
+        logging.getLogger("cachepanel.webpush").exception("Failed to send prefill-result notification")
 
 
 def trigger_prefill(service: str) -> PrefillRunResult:

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, ExternalLink, Heart, Home, Image, Info, KeyRound, LogIn, Palette, Send, Share2, ShieldCheck, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
+import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, ExternalLink, Heart, Home, Image, Info, KeyRound, LogIn, Palette, Send, Share2, ShieldCheck, Smartphone, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,29 @@ import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { ACCENTS, getStoredAccent, setAccent, type Accent } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+
+// PushManager.subscribe()'s applicationServerKey wants a Uint8Array, but
+// the backend hands back the VAPID public key as base64url text (see
+// webpush_keys.get_public_key_b64()) -- this is the standard conversion
+// snippet for that (unpadded base64url -> padded standard base64 -> raw
+// bytes), the same one used across basically every Web Push tutorial since
+// there's no built-in for it.
+function urlBase64ToUint8Array(base64Url: string): Uint8Array<ArrayBuffer> {
+  const padding = "=".repeat((4 - (base64Url.length % 4)) % 4);
+  const base64 = (base64Url + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  // `new Uint8Array(length)` (unlike Uint8Array.from(), see below) is
+  // always backed by a real ArrayBuffer, not the wider ArrayBufferLike
+  // (which also covers SharedArrayBuffer) -- PushSubscriptionOptionsInit's
+  // applicationServerKey is typed as BufferSource, which only accepts the
+  // former, so Uint8Array.from()'s return type fails to compile here even
+  // though it would work fine at runtime.
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) {
+    output[i] = raw.charCodeAt(i);
+  }
+  return output;
+}
 
 export function Settings() {
   const { t } = useI18n();
@@ -47,6 +70,10 @@ export function Settings() {
   const [deletingTokenId, setDeletingTokenId] = useState<number | null>(null);
   const [pendingShareBundle, setPendingShareBundle] = useState<ExportBundle | null>(null);
   const [applyingShareBundle, setApplyingShareBundle] = useState(false);
+  const [webpushSupported, setWebpushSupported] = useState(false);
+  const [webpushSubscribed, setWebpushSubscribed] = useState(false);
+  const [webpushBusy, setWebpushBusy] = useState(false);
+  const [testingWebpush, setTestingWebpush] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const backupFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -111,6 +138,74 @@ export function Settings() {
   useEffect(() => {
     if (isAdmin) reloadTokens();
   }, [isAdmin]);
+
+  // Whether THIS device/browser is currently subscribed -- read straight
+  // from the Push API itself (not a backend flag), since that's the one
+  // source of truth for "does this specific browser have an active
+  // subscription" (the backend only knows the union of all devices, not
+  // which one the current page load is running on).
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    setWebpushSupported(true);
+    navigator.serviceWorker.ready
+      .then((registration) => registration.pushManager.getSubscription())
+      .then((sub) => setWebpushSubscribed(!!sub))
+      .catch(() => setWebpushSubscribed(false));
+  }, []);
+
+  async function handleWebpushSubscribe() {
+    setWebpushBusy(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        toast.error(t("settings.webpushPermissionDenied"));
+        return;
+      }
+      const registration = await navigator.serviceWorker.ready;
+      const { public_key } = await api.webpushVapidPublicKey();
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(public_key),
+      });
+      await api.webpushSubscribe(subscription.toJSON());
+      setWebpushSubscribed(true);
+      toast.success(t("settings.webpushSubscribedNotice"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.webpushSubscribeFailed"));
+    } finally {
+      setWebpushBusy(false);
+    }
+  }
+
+  async function handleWebpushUnsubscribe() {
+    setWebpushBusy(true);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await api.webpushUnsubscribe(subscription.endpoint);
+        await subscription.unsubscribe();
+      }
+      setWebpushSubscribed(false);
+      toast.success(t("settings.webpushUnsubscribedNotice"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.webpushUnsubscribeFailed"));
+    } finally {
+      setWebpushBusy(false);
+    }
+  }
+
+  async function handleWebpushTest() {
+    setTestingWebpush(true);
+    try {
+      const result = await api.webpushTest();
+      toast.success(`${t("settings.webpushTestSentNotice")} (${result.subscriber_count})`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.webpushTestFailed"));
+    } finally {
+      setTestingWebpush(false);
+    }
+  }
 
   function handleAccentChange(next: Accent) {
     setAccent(next);
@@ -1020,6 +1115,41 @@ export function Settings() {
                 </Button>
               </div>
             </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card id="section-webpush">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4" /> {t("settings.webpush")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-xs text-[var(--muted)]">{t("settings.webpushHint")}</p>
+          {!webpushSupported ? (
+            <p className="text-sm text-[var(--muted)]">{t("settings.webpushUnsupported")}</p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              {webpushSubscribed ? (
+                <>
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--ok)]">
+                    <CheckCircle2 className="h-4 w-4" /> {t("settings.webpushSubscribed")}
+                  </span>
+                  <Button type="button" variant="outline" size="sm" disabled={webpushBusy} onClick={handleWebpushUnsubscribe}>
+                    {webpushBusy ? t("settings.webpushUnsubscribing") : t("settings.webpushUnsubscribe")}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" disabled={testingWebpush} onClick={handleWebpushTest}>
+                    <Send className="h-3.5 w-3.5" />
+                    {testingWebpush ? t("settings.webpushTesting") : t("settings.webpushTest")}
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" size="sm" disabled={webpushBusy} onClick={handleWebpushSubscribe}>
+                  {webpushBusy ? t("settings.webpushSubscribing") : t("settings.webpushSubscribe")}
+                </Button>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

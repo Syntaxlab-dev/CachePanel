@@ -11,3 +11,4 @@ prometheus-client==0.21.1
 dnspython==2.7.0
 psycopg[binary]==3.2.3
 pyotp==2.9.0
+pywebpush==2.0.3

@@ -40,6 +40,15 @@ The UI ships German and English (`frontend/src/lib/i18n.tsx`), with the two dict
 
 Additional languages beyond DE/EN aren't a current priority for the maintainers, but the `i18n.tsx` structure is a plain object per language — a PR adding a third language dictionary is welcome if the community wants to contribute one.
 
+### Adding a new language
+
+There's no runtime language-pack loading (yet) — a new language becomes a real block in `i18n.tsx`, added via a PR, the same way `de`/`en` work today. To get a starting point:
+
+1. Run `node scripts/export-i18n-template.mjs` — regenerates `i18n-template.json` at the repo root from the current `en` dictionary (it's also committed, so you can start from that file directly if you don't want to run the script).
+2. Translate every value in that JSON file. Keep the keys untouched.
+3. Turn the translated JSON into a new `dictionaries.xx` block in `frontend/src/lib/i18n.tsx` (copy the shape of the existing `en` block), and add `"xx"` to the `Lang` type at the top of the file.
+4. Open a PR. `npm run build` must still pass — a missing key falls back to `de` at runtime (see `useI18n()`'s `t()` function) rather than crashing, but a complete dictionary is the goal.
+
 ## Before opening a PR
 
 - Backend: `python -m py_compile` on anything you touched (or better, actually run it against a real LanCache setup if you have one)
