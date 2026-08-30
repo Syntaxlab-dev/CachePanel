@@ -20,6 +20,7 @@ class SettingsUpdate(BaseModel):
     report_weekday: int | None = None
     report_hour: int | None = None
     report_minute: int | None = None
+    public_display_enabled: bool | None = None
 
 
 class NotificationTestRequest(BaseModel):

@@ -19,6 +19,7 @@ from app.routers import (
     health,
     metrics,
     prefill,
+    public_display,
     schedule,
     settings,
     steam,
@@ -78,6 +79,7 @@ app.include_router(schedule.router)
 app.include_router(metrics.router)
 app.include_router(backup.router)
 app.include_router(users.router)
+app.include_router(public_display.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 

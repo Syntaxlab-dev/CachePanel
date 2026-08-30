@@ -35,6 +35,10 @@ _DEFAULTS = {
     "report_weekday": 0,
     "report_hour": 9,
     "report_minute": 0,
+    # LAN-party display (routers/public_display.py) -- off by default
+    # (fail closed): the /display-data endpoint returns 404 unless this is
+    # explicitly turned on, so a fresh install never exposes it by accident.
+    "public_display_enabled": False,
 }
 
 

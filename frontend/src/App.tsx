@@ -8,6 +8,7 @@ import { Epic } from "@/pages/Epic";
 import { Settings } from "@/pages/Settings";
 import { Setup } from "@/pages/Setup";
 import { Login } from "@/pages/Login";
+import { PublicDisplay } from "@/pages/PublicDisplay";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { I18nProvider, useI18n } from "@/lib/i18n";
 
@@ -38,19 +39,34 @@ function Gate() {
   );
 }
 
+// /display is registered here, one level above AuthProvider, so it never
+// triggers the login/setup gate (or even the auth-status fetch behind it)
+// -- it's the public LAN-party screen (see PublicDisplay.tsx +
+// backend/app/routers/public_display.py), meant to work with no session at
+// all. Everything else keeps going through the existing authenticated
+// Gate() below, unchanged.
+function AuthenticatedApp() {
+  return (
+    <AuthProvider>
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          style: { background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--border)" },
+        }}
+      />
+      <Gate />
+    </AuthProvider>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <I18nProvider>
-        <AuthProvider>
-          <Toaster
-            position="bottom-right"
-            toastOptions={{
-              style: { background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--border)" },
-            }}
-          />
-          <Gate />
-        </AuthProvider>
+        <Routes>
+          <Route path="/display" element={<PublicDisplay />} />
+          <Route path="/*" element={<AuthenticatedApp />} />
+        </Routes>
       </I18nProvider>
     </BrowserRouter>
   );

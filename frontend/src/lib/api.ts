@@ -78,6 +78,7 @@ export interface AppSettings {
   report_weekday: number;
   report_hour: number;
   report_minute: number;
+  public_display_enabled: boolean;
 }
 
 export interface CacheForecast {
@@ -91,6 +92,30 @@ export interface CacheForecast {
 }
 
 export type TrafficWindow = "24h" | "7d" | "30d";
+
+// Shape of GET /display-data (public, unauthenticated LAN-party screen --
+// see backend/app/routers/public_display.py for exactly which fields this
+// is allowed to contain; deliberately narrower than DashboardStats, e.g.
+// no top_clients).
+export interface PublicDisplayData {
+  overall: {
+    total_requests: number;
+    hit_ratio: number;
+    bandwidth_saved_bytes: number;
+    hit_bytes: number;
+    miss_bytes: number;
+  };
+  services: { service: string; hit_bytes: number; miss_bytes: number }[];
+  timeline: TimelinePoint[];
+  percent_used: number | null;
+  forecast: {
+    available: boolean;
+    reason: "not_enough_data" | "not_growing" | "disk_usage_unavailable" | null;
+    hours_until_full: number | null;
+    growth_bytes_per_day: number | null;
+  };
+  ready_counts: { steam: number; battlenet: number; epic: number };
+}
 
 export interface VersionInfo {
   git_sha: string;
@@ -280,4 +305,15 @@ export const api = {
 
 export function prefillStreamUrl(service: "steam" | "battlenet" | "epic"): string {
   return `/api/prefill/${service}/stream`;
+}
+
+// Deliberately its own unauthenticated fetch, not routed through `api.*` /
+// request() -- this hits /display-data (no /api/ prefix, no session
+// cookie sent or needed, see public_display.py) and a 404 there just means
+// "the LAN-party display isn't enabled", which the caller treats as a
+// normal falsy result rather than an error to surface.
+export async function fetchPublicDisplayData(): Promise<PublicDisplayData | null> {
+  const res = await fetch("/display-data");
+  if (!res.ok) return null;
+  return (await res.json()) as PublicDisplayData;
 }

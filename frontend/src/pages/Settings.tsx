@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Archive, Bell, CheckCircle2, Download, Image, Info, KeyRound, LogIn, Palette, Send, Sparkles, Trash2, Upload, UserPlus, Users } from "lucide-react";
+import { AlertCircle, Archive, Bell, CheckCircle2, Download, ExternalLink, Image, Info, KeyRound, LogIn, Palette, Send, Sparkles, Trash2, Tv, Upload, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ export function Settings() {
   const [version, setVersion] = useState<VersionInfo | null>(null);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [restoringBackup, setRestoringBackup] = useState(false);
+  const [savingDisplayToggle, setSavingDisplayToggle] = useState(false);
   const [users, setUsers] = useState<PanelUser[] | null>(null);
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -148,6 +149,20 @@ export function Settings() {
       toast.error(err instanceof Error ? err.message : t("settings.reportSendFailed"));
     } finally {
       setSendingReport(false);
+    }
+  }
+
+  async function handleSaveDisplayToggle() {
+    if (!values) return;
+    setSavingDisplayToggle(true);
+    try {
+      const updated = await api.saveSettings({ public_display_enabled: values.public_display_enabled });
+      setValues(updated);
+      toast.success(t("settings.publicDisplaySaved"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("common.savingFailed"));
+    } finally {
+      setSavingDisplayToggle(false);
     }
   }
 
@@ -635,6 +650,39 @@ export function Settings() {
               onChange={handleBackupRestoreFile}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Tv className="h-4 w-4" /> {t("settings.publicDisplay")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {!values ? (
+            <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={values.public_display_enabled}
+                  onChange={(e) => setValues({ ...values, public_display_enabled: e.target.checked })}
+                />
+                {t("settings.publicDisplayEnabled")}
+              </label>
+              <p className="text-xs text-[var(--muted)]">{t("settings.publicDisplayHint")}</p>
+              <div className="flex items-center gap-2">
+                <Button type="button" disabled={savingDisplayToggle} onClick={handleSaveDisplayToggle}>
+                  {savingDisplayToggle ? t("settings.saving") : t("settings.publicDisplaySave")}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => window.open("/display", "_blank")}>
+                  <ExternalLink className="h-4 w-4" /> {t("settings.publicDisplayOpen")}
+                </Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
