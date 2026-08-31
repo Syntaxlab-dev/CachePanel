@@ -21,10 +21,13 @@ replaces rather than duplicates) keyed on the ISO date string.
 import json
 import os
 import tempfile
+from datetime import date
 from pathlib import Path
 from threading import Lock
 
 from app.services import db
+
+_DEFAULT_STREAK_THRESHOLD = 0.8
 
 _STORE_PATH = Path(os.environ.get("DAILY_STATS_PATH", "/data/daily_stats.json"))
 _lock = Lock()
@@ -128,3 +131,44 @@ def get_month_total(month: str) -> dict:
             miss_bytes = sum(d["miss_bytes"] for d in days)
             total_requests = sum(d["total_requests"] for d in days)
     return {"hit_bytes": hit_bytes, "miss_bytes": miss_bytes, "total_requests": total_requests}
+
+
+def compute_current_hit_ratio_streak(threshold: float = _DEFAULT_STREAK_THRESHOLD) -> int:
+    """How many days in a row, ending at the most recently RECORDED day
+    (not necessarily today -- see below), had a hit ratio of at least
+    `threshold`. Byte-based (hit_bytes / (hit_bytes + miss_bytes)), NOT the
+    request-count-based ratio records_store.py's highest_hit_ratio uses --
+    this store only ever kept hit/miss BYTE totals per day, never a
+    separate hit/miss request COUNT, so a request-based streak isn't
+    derivable from it. Computed fresh on every call rather than persisted:
+    it's a live "how's it going right now" number, not a historical record,
+    so there's no stale cached value that could ever need invalidating.
+
+    A gap in the calendar (the panel was offline, or a day never got a
+    snapshot) breaks the streak at that point rather than skipping over
+    it -- checked via real date arithmetic on the `date` column, not just
+    "the next row in the list", so two rows that are adjacent in storage
+    but not on the calendar don't count as consecutive."""
+    with _lock:
+        if db.is_enabled():
+            with db.get_connection() as conn:
+                rows = conn.execute(
+                    "SELECT date, hit_bytes, miss_bytes FROM daily_stats ORDER BY date DESC"
+                ).fetchall()
+            days = [{"date": r[0], "hit_bytes": r[1], "miss_bytes": r[2]} for r in rows]
+        else:
+            days = sorted(_read_all_file(), key=lambda d: d["date"], reverse=True)
+
+    streak = 0
+    previous_date: date | None = None
+    for day in days:
+        total = day["hit_bytes"] + day["miss_bytes"]
+        ratio = day["hit_bytes"] / total if total else 0.0
+        if ratio < threshold:
+            break
+        current_date = date.fromisoformat(day["date"])
+        if previous_date is not None and (previous_date - current_date).days != 1:
+            break
+        streak += 1
+        previous_date = current_date
+    return streak

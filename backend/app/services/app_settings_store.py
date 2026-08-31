@@ -115,6 +115,28 @@ _DEFAULTS = {
     # the access-log tail read can reliably cover -- see
     # daily_stats_store.get_month_total()'s own docstring.
     "monthly_budget_gb": 0.0,
+    # Grafana one-click dashboard import (4th feature round, Welle 5) --
+    # see services/grafana_import.py. Blank url/key = the Settings button
+    # is disabled client-side rather than attempted and failing; the
+    # import call itself always takes its own explicit datasource_uid
+    # parameter rather than one stored here, since which datasource to use
+    # is a per-import choice, not a standing setting.
+    "grafana_url": "",
+    "grafana_api_key": "",
+    # SFTP backup target (4th feature round, Welle 5) -- see
+    # services/sftp_backup.py. Off by default, same "explicit opt-in"
+    # contract as auto_backup_enabled above (which this is layered on top
+    # of: this fires only as a second leg of THAT job, never on its own
+    # schedule). Only one of sftp_password/sftp_private_key is expected to
+    # be set; sftp_backup.py prefers the private key when both are present.
+    "sftp_backup_enabled": False,
+    "sftp_host": "",
+    "sftp_port": 22,
+    "sftp_username": "",
+    "sftp_password": "",
+    "sftp_private_key": "",
+    "sftp_remote_dir": "/backups",
+    "sftp_retention": 7,
 }
 
 

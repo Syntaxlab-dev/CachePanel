@@ -194,6 +194,39 @@ _SCHEMA_STATEMENTS = [
         created_date TEXT NOT NULL
     )
     """,
+    # Multiple prefill time windows per service (4th feature round, Welle
+    # 5) -- see schedule_store.py for the full migration story from the
+    # old single hour/minute-per-service `schedule` table above (kept
+    # as-is, not dropped: it still carries `enabled` plus a migration
+    # sentinel in `hour`). `days` is a comma-joined list of 0-6 ints
+    # (0=Monday, matching APScheduler's own CronTrigger day_of_week
+    # convention already used elsewhere in this project) rather than a
+    # separate junction table -- this store never queries into
+    # individual days, only ever reads/writes the whole set at once.
+    """
+    CREATE TABLE IF NOT EXISTS schedule_windows (
+        id SERIAL PRIMARY KEY,
+        service TEXT NOT NULL,
+        hour INTEGER NOT NULL,
+        minute INTEGER NOT NULL,
+        days TEXT NOT NULL
+    )
+    """,
+]
+
+# Adds the two new record categories from the 4th feature round's Welle 5
+# to a `records` table that may already exist from an earlier round --
+# CREATE TABLE IF NOT EXISTS alone can't add columns to a table that's
+# already there, same reasoning as _AUTH_MIGRATION_STATEMENTS below.
+# Defaults (0 / NULL) match records_store.py's own _DEFAULTS, so an
+# existing installation's upgrade behaves exactly like a fresh one that
+# just hasn't recorded a day yet.
+_RECORDS_MIGRATION_STATEMENTS = [
+    "ALTER TABLE records ADD COLUMN IF NOT EXISTS most_requests_in_day INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE records ADD COLUMN IF NOT EXISTS most_requests_in_day_date TEXT",
+    "ALTER TABLE records ADD COLUMN IF NOT EXISTS best_week_avg_bandwidth_bytes DOUBLE PRECISION NOT NULL DEFAULT 0",
+    "ALTER TABLE records ADD COLUMN IF NOT EXISTS best_week_avg_start_date TEXT",
+    "ALTER TABLE records ADD COLUMN IF NOT EXISTS best_week_avg_end_date TEXT",
 ]
 
 # Run unconditionally, after _SCHEMA_STATEMENTS, on every startup -- each
@@ -247,5 +280,7 @@ def init_schema() -> None:
         for statement in _SCHEMA_STATEMENTS:
             conn.execute(statement)
         for statement in _AUTH_MIGRATION_STATEMENTS:
+            conn.execute(statement)
+        for statement in _RECORDS_MIGRATION_STATEMENTS:
             conn.execute(statement)
         conn.commit()

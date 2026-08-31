@@ -6,9 +6,11 @@ from app.services import (
     audit_log_store,
     cache_report,
     discord_notifier,
+    grafana_import,
     notification_templates,
     ntfy_notifier,
     scheduler_service,
+    sftp_backup,
     update_check,
 )
 from app.settings import settings
@@ -53,6 +55,16 @@ class SettingsUpdate(BaseModel):
     quiet_hours_end_minute: int | None = None
     notification_templates: dict[str, str] | None = None
     monthly_budget_gb: float | None = None
+    grafana_url: str | None = None
+    grafana_api_key: str | None = None
+    sftp_backup_enabled: bool | None = None
+    sftp_host: str | None = None
+    sftp_port: int | None = None
+    sftp_username: str | None = None
+    sftp_password: str | None = None
+    sftp_private_key: str | None = None
+    sftp_remote_dir: str | None = None
+    sftp_retention: int | None = None
 
 
 class TemplatePreviewRequest(BaseModel):
@@ -67,6 +79,22 @@ class NotificationTestRequest(BaseModel):
 class NtfyTestRequest(BaseModel):
     server_url: str
     topic: str
+
+
+class GrafanaImportRequest(BaseModel):
+    # Only needed when list_prometheus_datasources() found more than one
+    # candidate on a previous attempt -- see grafana_import.py's own
+    # docstring for why this isn't just always required.
+    datasource_uid: str | None = None
+
+
+class SftpTestRequest(BaseModel):
+    host: str
+    port: int = 22
+    username: str
+    password: str = ""
+    private_key: str = ""
+    remote_dir: str = "/backups"
 
 
 @router.get("", summary="Current app settings", description="Steam API key + SteamID64, as stored (encrypted at rest) on this instance. Never shared with anyone else. Also carries the caller's own current client_ip (not a persisted setting) so the ip_allowlist editor in Settings can warn before saving a list that would exclude the very browser editing it.")
@@ -178,6 +206,51 @@ def get_version():
         "git_sha_short": settings.git_sha[:7] if settings.git_sha else "",
         "repo_url": "https://github.com/Syntaxlab-dev/CachePanel",
     }
+
+
+@router.post(
+    "/grafana/import",
+    summary="Import the bundled Grafana dashboard",
+    description="Imports grafana/cachepanel-dashboard.json into the Grafana instance configured in Settings "
+    "(grafana_url/grafana_api_key must already be saved). Auto-detects the Prometheus datasource to wire the "
+    "dashboard to; if more than one exists, `datasource_uid` must be supplied (see the `candidates` field on "
+    "a 409 response) to disambiguate.",
+)
+def import_grafana_dashboard(body: GrafanaImportRequest, request: Request):
+    cfg = app_settings_store.get_settings()
+    grafana_url = cfg.get("grafana_url") or ""
+    api_key = cfg.get("grafana_api_key") or ""
+    if not grafana_url or not api_key:
+        raise HTTPException(status_code=400, detail="Grafana-URL und API-Key müssen erst gespeichert werden.")
+
+    try:
+        result = grafana_import.import_dashboard(grafana_url, api_key, body.datasource_uid)
+    except grafana_import.DatasourceAmbiguousError as exc:
+        raise HTTPException(status_code=409, detail={"message": str(exc), "candidates": exc.candidates}) from exc
+    except grafana_import.GrafanaImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    audit_log_store.log(
+        "grafana_dashboard_imported", request.session.get("username"), f"grafana_url={grafana_url}", _client_ip(request)
+    )
+    return result
+
+
+@router.post(
+    "/sftp/test",
+    summary="Test an SFTP backup target",
+    description="Connects and confirms the remote directory is reachable (creating it if it doesn't exist "
+    "yet) using the given connection details directly -- not necessarily the saved ones, same "
+    "test-before-saving pattern as the Discord/ntfy test endpoints above. Never uploads anything.",
+)
+def test_sftp(body: SftpTestRequest):
+    try:
+        sftp_backup.test_connection(
+            body.host, body.port, body.username, body.password, body.private_key, body.remote_dir
+        )
+    except sftp_backup.SftpBackupError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"message": "Connection successful."}
 
 
 @router.get(

@@ -99,6 +99,16 @@ export interface AppSettings {
   quiet_hours_end_minute: number;
   notification_templates: Record<string, string>;
   monthly_budget_gb: number;
+  grafana_url: string;
+  grafana_api_key: string;
+  sftp_backup_enabled: boolean;
+  sftp_host: string;
+  sftp_port: number;
+  sftp_username: string;
+  sftp_password: string;
+  sftp_private_key: string;
+  sftp_remote_dir: string;
+  sftp_retention: number;
 }
 
 export type NotificationTemplateEvent = "prefill_success" | "prefill_failure" | "disk_warning" | "traffic_alert" | "weekly_report";
@@ -233,6 +243,12 @@ export interface PublicDisplayData {
     most_bandwidth_saved_date: string | null;
     highest_hit_ratio: number;
     highest_hit_ratio_date: string | null;
+    most_requests_in_day: number;
+    most_requests_in_day_date: string | null;
+    best_week_avg_bandwidth_bytes: number;
+    best_week_avg_start_date: string | null;
+    best_week_avg_end_date: string | null;
+    current_hit_ratio_streak_days: number;
   };
 }
 
@@ -306,7 +322,16 @@ export interface BackupBundle {
 
 // ScheduleConfig itself is defined further down, after this type is used --
 // a small structural duplicate here avoids reordering the whole file.
-type ScheduleConfigLike = Record<string, { enabled: boolean; hour: number; minute: number }>;
+type ScheduleConfigLike = Record<string, { enabled: boolean; windows: ScheduleWindow[] }>;
+
+export interface GrafanaDatasourceCandidate {
+  uid: string;
+  name: string;
+}
+
+export type GrafanaImportResult =
+  | { ok: true; ambiguous: false }
+  | { ok: false; ambiguous: true; candidates: GrafanaDatasourceCandidate[] };
 
 export interface UpdateCheckResult {
   checked: boolean;
@@ -331,10 +356,18 @@ export interface TotpSetupResult {
   uri: string;
 }
 
-export interface ServiceSchedule {
-  enabled: boolean;
+export interface ScheduleWindow {
+  id: number;
   hour: number;
   minute: number;
+  // 0=Monday..6=Sunday. Empty means every day (same default the backend
+  // applies when this is omitted/empty on save).
+  days: number[];
+}
+
+export interface ServiceSchedule {
+  enabled: boolean;
+  windows: ScheduleWindow[];
 }
 
 export interface ScheduleConfig {
@@ -404,6 +437,34 @@ export const api = {
     }),
   getVersion: () => request<VersionInfo>("/api/settings/version"),
   checkForUpdate: () => request<UpdateCheckResult>("/api/settings/update-check"),
+  // Dedicated fetch (not the generic request<T>() helper above) because a
+  // 409 here carries a structured `{message, candidates}` body -- see
+  // routers/settings.py's own docstring -- that the picker UI needs to
+  // read, not just a plain string `detail` the generic helper extracts.
+  importGrafanaDashboard: async (datasourceUid?: string): Promise<GrafanaImportResult> => {
+    const res = await fetch("/api/settings/grafana/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ datasource_uid: datasourceUid ?? null }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 409 && body?.detail?.candidates) {
+      return { ok: false, ambiguous: true, candidates: body.detail.candidates as GrafanaDatasourceCandidate[] };
+    }
+    if (!res.ok) {
+      const message = typeof body?.detail === "string" ? body.detail : `${res.status} ${res.statusText}`;
+      throw new Error(message);
+    }
+    return { ok: true, ambiguous: false };
+  },
+  testSftp: (params: {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    private_key: string;
+    remote_dir: string;
+  }) => request<{ message: string }>("/api/settings/sftp/test", { method: "POST", body: JSON.stringify(params) }),
   previewNotificationTemplate: (eventKey: NotificationTemplateEvent, template: string) =>
     request<{ preview: string }>("/api/settings/notification-templates/preview", {
       method: "POST",

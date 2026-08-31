@@ -30,6 +30,7 @@ from app.services import (
     quiet_hours,
     records_store,
     schedule_store,
+    sftp_backup,
     webpush_notifier,
     webpush_subscriptions_store,
 )
@@ -197,9 +198,29 @@ def _run_auto_backup() -> None:
     if not cfg.get("auto_backup_enabled"):
         return
     try:
-        backup_builder.write_auto_backup(cfg.get("auto_backup_retention", 7))
+        local_path = backup_builder.write_auto_backup(cfg.get("auto_backup_retention", 7))
     except OSError:
         logger.exception("Automatic backup failed")
+        return
+
+    # Optional second leg -- the local backup above already succeeded and
+    # its own retention already ran; an SFTP push failure here is logged
+    # but never rolls back or retries the local write, same "each channel
+    # degrades independently" reasoning as the notification channels below.
+    if cfg.get("sftp_backup_enabled"):
+        try:
+            sftp_backup.upload_backup(
+                host=cfg.get("sftp_host") or "",
+                port=cfg.get("sftp_port", 22),
+                username=cfg.get("sftp_username") or "",
+                password=cfg.get("sftp_password") or "",
+                private_key=cfg.get("sftp_private_key") or "",
+                remote_dir=cfg.get("sftp_remote_dir") or "/backups",
+                local_path=local_path,
+                retention=cfg.get("sftp_retention", 7),
+            )
+        except sftp_backup.SftpBackupError:
+            logger.exception("SFTP backup push failed")
 
 
 def _run_auto_cleanup_check() -> None:
@@ -379,8 +400,21 @@ def _run_daily_records_snapshot() -> None:
     records_store.record_bandwidth_saved(total_hit_bytes, date_str)
     if total_requests >= _RECORDS_MIN_REQUESTS_FOR_HIT_RATIO:
         records_store.record_hit_ratio(total_hit_count / total_requests, date_str)
+    records_store.record_most_requests(total_requests, date_str)
 
     daily_stats_store.record_day(date_str, total_hit_bytes, total_miss_bytes, total_requests)
+
+    # Best 7-day average, computed from whatever the 7 most recently
+    # RECORDED days are (see daily_stats_store.get_range()'s own docstring)
+    # -- if the panel was offline on some day in between, this ends up
+    # averaging over a span wider than 7 calendar days rather than
+    # silently guessing a value for the gap. Only evaluated once at least
+    # 7 days have ever been recorded, so a fresh install's first week
+    # doesn't set a misleadingly low "record" from partial data.
+    history = daily_stats_store.get_range(7)
+    if len(history) == 7:
+        week_avg_bytes = sum(d["hit_bytes"] for d in history) / 7
+        records_store.record_best_week_avg(week_avg_bytes, history[0]["date"], history[-1]["date"])
 
 
 def reload_report_job() -> None:
@@ -428,18 +462,30 @@ def reload_auto_backup_job() -> None:
 
 
 def reload_jobs() -> None:
+    """Removes every existing `prefill-{service}-*` job and re-adds one
+    APScheduler job per (service, window) pair -- unlike the single fixed
+    job ID the pre-Welle-5 schedule used, a service can now have any
+    number of windows, so job IDs are removed by PREFIX match here rather
+    than a single known ID, then re-added fresh from the current config."""
     config = schedule_store.get_schedule()
+    for service in config:
+        prefix = f"prefill-{service}-"
+        for job in _scheduler.get_jobs():
+            if job.id.startswith(prefix):
+                job.remove()
+
     for service, entry in config.items():
-        job_id = f"prefill-{service}"
-        existing = _scheduler.get_job(job_id)
-        if existing:
-            existing.remove()
-        if entry.get("enabled"):
+        if not entry.get("enabled"):
+            continue
+        for window in entry.get("windows", []):
+            day_of_week = ",".join(str(d) for d in window.get("days", list(range(7))))
             _scheduler.add_job(
                 _run_job,
-                trigger=CronTrigger(hour=entry.get("hour", 2), minute=entry.get("minute", 0)),
+                trigger=CronTrigger(
+                    day_of_week=day_of_week, hour=window.get("hour", 2), minute=window.get("minute", 0)
+                ),
                 args=[service],
-                id=job_id,
+                id=f"prefill-{service}-{window['id']}",
                 replace_existing=True,
             )
 

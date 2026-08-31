@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation } from "react-router-dom";
-import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, Eye, ExternalLink, Fingerprint, Gauge, Heart, Home, Image, Info, KeyRound, LogIn, MessageSquareText, MonitorSmartphone, Moon, Network, Palette, Send, Share2, ShieldCheck, Smartphone, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, UserCircle2, Users, type LucideIcon } from "lucide-react";
+import { AlertCircle, Archive, BarChart3, Bell, CheckCircle2, Copy, Download, Eye, ExternalLink, Fingerprint, Gauge, Heart, Home, Image, Info, KeyRound, LogIn, MessageSquareText, MonitorSmartphone, Moon, Network, Palette, Send, Server, Share2, ShieldCheck, Smartphone, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, UserCircle2, Users, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScheduleCard } from "@/components/ScheduleCard";
 import { InfoTooltip } from "@/components/InfoTooltip";
-import { api, type ApiToken, type AppSettingsResponse, type BackupBundle, type ExportBundle, type PanelRole, type PanelSession, type PanelUser, type UpdateCheckResult, type VersionInfo, type WebauthnCredential } from "@/lib/api";
+import { api, type ApiToken, type AppSettingsResponse, type BackupBundle, type ExportBundle, type GrafanaDatasourceCandidate, type PanelRole, type PanelSession, type PanelUser, type UpdateCheckResult, type VersionInfo, type WebauthnCredential } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { ACCENTS, getStoredAccent, setAccent, type Accent } from "@/lib/theme";
@@ -51,9 +51,11 @@ const SECTION_TAB_MAP: Record<string, SettingsTab> = {
   "section-templates": "notifications",
   "section-monthly-budget": "notifications",
   "section-autobackup": "automation",
+  "section-sftp-backup": "automation",
   "section-autocleanup": "automation",
   "section-api-tokens": "integrations",
   "section-home-assistant": "integrations",
+  "section-grafana-import": "integrations",
   "section-display": "appearance",
 };
 
@@ -99,6 +101,12 @@ export function Settings() {
   const [loginNotice, setLoginNotice] = useState<"success" | "failed" | null>(null);
   const [importing, setImporting] = useState(false);
   const [testingWebhook, setTestingWebhook] = useState(false);
+  const [testingSftp, setTestingSftp] = useState(false);
+  const [importingGrafana, setImportingGrafana] = useState(false);
+  const [grafanaDatasourceChoices, setGrafanaDatasourceChoices] = useState<GrafanaDatasourceCandidate[] | null>(
+    null,
+  );
+  const [selectedGrafanaDatasource, setSelectedGrafanaDatasource] = useState("");
   const [testingNtfy, setTestingNtfy] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
   const [version, setVersion] = useState<VersionInfo | null>(null);
@@ -650,6 +658,43 @@ export function Settings() {
       toast.error(err instanceof Error ? err.message : t("settings.discordTestFailed"));
     } finally {
       setTestingWebhook(false);
+    }
+  }
+
+  async function handleTestSftp() {
+    if (!values) return;
+    setTestingSftp(true);
+    try {
+      await api.testSftp({
+        host: values.sftp_host,
+        port: values.sftp_port,
+        username: values.sftp_username,
+        password: values.sftp_password,
+        private_key: values.sftp_private_key,
+        remote_dir: values.sftp_remote_dir,
+      });
+      toast.success(t("settings.sftpTestOkNotice"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.sftpTestFailed"));
+    } finally {
+      setTestingSftp(false);
+    }
+  }
+
+  async function handleImportGrafana(datasourceUid?: string) {
+    setImportingGrafana(true);
+    try {
+      const result = await api.importGrafanaDashboard(datasourceUid);
+      if (result.ambiguous) {
+        setGrafanaDatasourceChoices(result.candidates);
+        return;
+      }
+      setGrafanaDatasourceChoices(null);
+      toast.success(t("settings.grafanaImportOkNotice"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.grafanaImportFailed"));
+    } finally {
+      setImportingGrafana(false);
     }
   }
 
@@ -1781,6 +1826,146 @@ export function Settings() {
         </CardContent>
       </Card>
 
+      <Card id="section-sftp-backup">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Server className="h-4 w-4" /> {t("settings.sftpBackup")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!values ? (
+            <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={values.sftp_backup_enabled}
+                  onChange={(e) => setValues({ ...values, sftp_backup_enabled: e.target.checked })}
+                  disabled={isViewer}
+                />
+                {t("settings.sftpBackupEnabled")}
+              </label>
+              <p className="text-xs text-[var(--muted)]">{t("settings.sftpBackupHint")}</p>
+
+              <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="sftp_host" className="text-sm font-medium">
+                    {t("settings.sftpHost")}
+                  </label>
+                  <Input
+                    id="sftp_host"
+                    placeholder="backup.example.com"
+                    value={values.sftp_host}
+                    onChange={(e) => setValues({ ...values, sftp_host: e.target.value })}
+                    disabled={isViewer}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="sftp_port" className="text-sm font-medium">
+                    {t("settings.sftpPort")}
+                  </label>
+                  <Input
+                    id="sftp_port"
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={values.sftp_port}
+                    onChange={(e) => setValues({ ...values, sftp_port: Number(e.target.value) || 22 })}
+                    disabled={isViewer}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="sftp_username" className="text-sm font-medium">
+                  {t("settings.sftpUsername")}
+                </label>
+                <Input
+                  id="sftp_username"
+                  value={values.sftp_username}
+                  onChange={(e) => setValues({ ...values, sftp_username: e.target.value })}
+                  disabled={isViewer}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="sftp_password" className="text-sm font-medium">
+                  {t("settings.sftpPassword")}
+                </label>
+                <Input
+                  id="sftp_password"
+                  type="password"
+                  value={values.sftp_password}
+                  onChange={(e) => setValues({ ...values, sftp_password: e.target.value })}
+                  disabled={isViewer}
+                />
+                <p className="text-xs text-[var(--muted)]">{t("settings.sftpAuthHint")}</p>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="sftp_private_key" className="text-sm font-medium">
+                  {t("settings.sftpPrivateKey")}
+                </label>
+                <textarea
+                  id="sftp_private_key"
+                  rows={4}
+                  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                  value={values.sftp_private_key}
+                  onChange={(e) => setValues({ ...values, sftp_private_key: e.target.value })}
+                  disabled={isViewer}
+                  className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-xs text-[var(--ink)] disabled:opacity-40"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="sftp_remote_dir" className="text-sm font-medium">
+                  {t("settings.sftpRemoteDir")}
+                </label>
+                <Input
+                  id="sftp_remote_dir"
+                  value={values.sftp_remote_dir}
+                  onChange={(e) => setValues({ ...values, sftp_remote_dir: e.target.value })}
+                  disabled={isViewer}
+                  className="max-w-64"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="sftp_retention" className="text-sm font-medium">
+                  {t("settings.sftpRetentionLabel")}
+                </label>
+                <Input
+                  id="sftp_retention"
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="max-w-32"
+                  value={values.sftp_retention}
+                  onChange={(e) => setValues({ ...values, sftp_retention: Number(e.target.value) || 7 })}
+                  disabled={isViewer}
+                />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={isViewer || saving}>
+                  {saving ? t("settings.saving") : t("settings.save")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isViewer || testingSftp || !values.sftp_host || !values.sftp_username}
+                  onClick={handleTestSftp}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {testingSftp ? t("settings.sftpTesting") : t("settings.sftpTest")}
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
       <Card id="section-autocleanup">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1927,6 +2112,97 @@ export function Settings() {
                 <Copy className="h-3.5 w-3.5" /> {t("settings.homeAssistantCopy")}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card id="section-grafana-import">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" /> {t("settings.grafanaImport")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!values ? (
+              <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+            ) : (
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <p className="text-xs text-[var(--muted)]">{t("settings.grafanaImportHint")}</p>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="grafana_url" className="text-sm font-medium">
+                    {t("settings.grafanaUrl")}
+                  </label>
+                  <Input
+                    id="grafana_url"
+                    placeholder="https://grafana.example.com"
+                    value={values.grafana_url}
+                    onChange={(e) => setValues({ ...values, grafana_url: e.target.value })}
+                    disabled={isViewer}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="grafana_api_key" className="text-sm font-medium">
+                    {t("settings.grafanaApiKey")}
+                  </label>
+                  <Input
+                    id="grafana_api_key"
+                    type="password"
+                    value={values.grafana_api_key}
+                    onChange={(e) => setValues({ ...values, grafana_api_key: e.target.value })}
+                    disabled={isViewer}
+                  />
+                  <p className="text-xs text-[var(--muted)]">{t("settings.grafanaApiKeyHint")}</p>
+                </div>
+
+                {grafanaDatasourceChoices && (
+                  <div className="flex flex-col gap-2 rounded-lg border border-[var(--warn)]/40 bg-[var(--warn-soft)] p-3">
+                    <p className="text-xs text-[var(--warn)]">{t("settings.grafanaDatasourceAmbiguous")}</p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <select
+                        aria-label={t("settings.grafanaDatasourceAmbiguous")}
+                        value={selectedGrafanaDatasource}
+                        onChange={(e) => setSelectedGrafanaDatasource(e.target.value)}
+                        className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)]"
+                      >
+                        <option value="" disabled>
+                          {t("settings.grafanaDatasourcePick")}
+                        </option>
+                        {grafanaDatasourceChoices.map((ds) => (
+                          <option key={ds.uid} value={ds.uid}>
+                            {ds.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!selectedGrafanaDatasource || importingGrafana}
+                        onClick={() => handleImportGrafana(selectedGrafanaDatasource)}
+                      >
+                        {t("settings.grafanaImportButton")}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <Button type="submit" disabled={isViewer || saving}>
+                    {saving ? t("settings.saving") : t("settings.save")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isViewer || importingGrafana || !values.grafana_url || !values.grafana_api_key}
+                    onClick={() => handleImportGrafana()}
+                  >
+                    <BarChart3 className="h-3.5 w-3.5" />
+                    {importingGrafana ? t("settings.grafanaImporting") : t("settings.grafanaImportButton")}
+                  </Button>
+                </div>
+              </form>
+            )}
           </CardContent>
         </Card>
       )}

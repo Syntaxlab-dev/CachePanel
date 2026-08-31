@@ -31,7 +31,7 @@ screen -- not a secret, the admin chose it to be shown here) and
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from app.services import app_settings_store, prefill_selection, records_store
+from app.services import app_settings_store, daily_stats_store, prefill_selection, records_store
 from app.services.cache_forecast import compute_forecast
 from app.services.cache_manager import CacheManagerError, get_disk_usage
 from app.services.log_parser import TRAFFIC_WINDOWS, aggregate_service_stats, iter_access_entries, traffic_timeline
@@ -130,5 +130,14 @@ def get_display_data():
             "most_bandwidth_saved_date": records["most_bandwidth_saved_date"],
             "highest_hit_ratio": records["highest_hit_ratio"],
             "highest_hit_ratio_date": records["highest_hit_ratio_date"],
+            "most_requests_in_day": records["most_requests_in_day"],
+            "most_requests_in_day_date": records["most_requests_in_day_date"],
+            "best_week_avg_bandwidth_bytes": records["best_week_avg_bandwidth_bytes"],
+            "best_week_avg_start_date": records["best_week_avg_start_date"],
+            "best_week_avg_end_date": records["best_week_avg_end_date"],
+            # Not a "record" in the persisted-highest sense -- computed
+            # live on every request, see daily_stats_store.py's own
+            # docstring for why it's byte- not request-based.
+            "current_hit_ratio_streak_days": daily_stats_store.compute_current_hit_ratio_streak(),
         },
     }

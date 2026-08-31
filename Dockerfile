@@ -21,6 +21,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY --from=frontend-build /app/frontend/dist ./static
 
+# Bundled Grafana dashboard JSON, read at runtime by
+# app/services/grafana_import.py's one-click import feature (4th feature
+# round, Welle 5) -- previously only present in the repo for manual
+# download, now needs to actually be inside the image.
+COPY grafana ./grafana
+
 EXPOSE 8000
 
 # Reuses the existing unauthenticated /metrics endpoint rather than adding

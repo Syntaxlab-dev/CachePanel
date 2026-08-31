@@ -207,7 +207,7 @@ export function PublicDisplay() {
           <Trophy className="h-4 w-4" /> {t("display.records")}
           <InfoTooltip text={t("display.recordsTooltip")} />
         </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-xs text-slate-500">{t("display.recordBandwidth")}</p>
             {data.records.most_bandwidth_saved_date ? (
@@ -234,7 +234,38 @@ export function PublicDisplay() {
               <p className="text-sm text-slate-500">{t("display.recordsNotYet")}</p>
             )}
           </div>
+          <div>
+            <p className="text-xs text-slate-500">{t("display.recordMostRequests")}</p>
+            {data.records.most_requests_in_day_date ? (
+              <p className="text-lg font-semibold text-slate-100">
+                {data.records.most_requests_in_day.toLocaleString()}
+                <span className="ml-2 text-sm font-normal text-slate-500">
+                  {new Date(data.records.most_requests_in_day_date).toLocaleDateString(locale)}
+                </span>
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">{t("display.recordsNotYet")}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-slate-500">{t("display.recordBestWeekAvg")}</p>
+            {data.records.best_week_avg_start_date ? (
+              <p className="text-lg font-semibold text-slate-100">
+                {formatBytes(data.records.best_week_avg_bandwidth_bytes)}
+                <span className="ml-2 text-sm font-normal text-slate-500">/{t("display.recordPerDay")}</span>
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">{t("display.recordsNotYet")}</p>
+            )}
+          </div>
         </div>
+        {data.records.current_hit_ratio_streak_days > 0 && (
+          <p className="mt-4 text-sm text-slate-400">
+            {t("display.currentStreakPrefix")}{" "}
+            <span className="font-semibold text-slate-100">{data.records.current_hit_ratio_streak_days}</span>{" "}
+            {t("display.currentStreakSuffix")}
+          </p>
+        )}
       </div>
 
       <footer className="mt-10 text-center text-xs text-slate-600">

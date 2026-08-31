@@ -35,6 +35,14 @@ _DEFAULTS = {
     "most_bandwidth_saved_date": None,
     "highest_hit_ratio": 0.0,
     "highest_hit_ratio_date": None,
+    # 4th feature round, Welle 5 -- most total requests (hits+misses) seen
+    # in a single day, and the best 7-day average of bandwidth saved (see
+    # scheduler_service.py's snapshot job for how both are computed).
+    "most_requests_in_day": 0,
+    "most_requests_in_day_date": None,
+    "best_week_avg_bandwidth_bytes": 0.0,
+    "best_week_avg_start_date": None,
+    "best_week_avg_end_date": None,
 }
 
 
@@ -68,7 +76,9 @@ def _read_raw_db() -> dict:
     with db.get_connection() as conn:
         row = conn.execute(
             "SELECT most_bandwidth_saved_bytes, most_bandwidth_saved_date, "
-            "highest_hit_ratio, highest_hit_ratio_date FROM records WHERE id = 1"
+            "highest_hit_ratio, highest_hit_ratio_date, most_requests_in_day, "
+            "most_requests_in_day_date, best_week_avg_bandwidth_bytes, "
+            "best_week_avg_start_date, best_week_avg_end_date FROM records WHERE id = 1"
         ).fetchone()
     if row is None:
         return dict(_DEFAULTS)
@@ -77,6 +87,11 @@ def _read_raw_db() -> dict:
         "most_bandwidth_saved_date": row[1],
         "highest_hit_ratio": row[2],
         "highest_hit_ratio_date": row[3],
+        "most_requests_in_day": row[4],
+        "most_requests_in_day_date": row[5],
+        "best_week_avg_bandwidth_bytes": row[6],
+        "best_week_avg_start_date": row[7],
+        "best_week_avg_end_date": row[8],
     }
 
 
@@ -84,17 +99,29 @@ def _write_raw_db(records: dict) -> None:
     with db.get_connection() as conn:
         conn.execute(
             "INSERT INTO records (id, most_bandwidth_saved_bytes, most_bandwidth_saved_date, "
-            "highest_hit_ratio, highest_hit_ratio_date) VALUES (1, %s, %s, %s, %s) "
+            "highest_hit_ratio, highest_hit_ratio_date, most_requests_in_day, "
+            "most_requests_in_day_date, best_week_avg_bandwidth_bytes, "
+            "best_week_avg_start_date, best_week_avg_end_date) VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
             "ON CONFLICT (id) DO UPDATE SET "
             "most_bandwidth_saved_bytes = EXCLUDED.most_bandwidth_saved_bytes, "
             "most_bandwidth_saved_date = EXCLUDED.most_bandwidth_saved_date, "
             "highest_hit_ratio = EXCLUDED.highest_hit_ratio, "
-            "highest_hit_ratio_date = EXCLUDED.highest_hit_ratio_date",
+            "highest_hit_ratio_date = EXCLUDED.highest_hit_ratio_date, "
+            "most_requests_in_day = EXCLUDED.most_requests_in_day, "
+            "most_requests_in_day_date = EXCLUDED.most_requests_in_day_date, "
+            "best_week_avg_bandwidth_bytes = EXCLUDED.best_week_avg_bandwidth_bytes, "
+            "best_week_avg_start_date = EXCLUDED.best_week_avg_start_date, "
+            "best_week_avg_end_date = EXCLUDED.best_week_avg_end_date",
             (
                 records["most_bandwidth_saved_bytes"],
                 records["most_bandwidth_saved_date"],
                 records["highest_hit_ratio"],
                 records["highest_hit_ratio_date"],
+                records["most_requests_in_day"],
+                records["most_requests_in_day_date"],
+                records["best_week_avg_bandwidth_bytes"],
+                records["best_week_avg_start_date"],
+                records["best_week_avg_end_date"],
             ),
         )
 
@@ -129,6 +156,39 @@ def record_hit_ratio(day_ratio: float, date_str: str) -> bool:
             return False
         current["highest_hit_ratio"] = day_ratio
         current["highest_hit_ratio_date"] = date_str
+        if db.is_enabled():
+            _write_raw_db(current)
+        else:
+            _write_raw_file(current)
+        return True
+
+
+def record_most_requests(day_requests: int, date_str: str) -> bool:
+    """Updates the record only if day_requests is a new high. Returns
+    whether it actually changed anything."""
+    with _lock:
+        current = _read_raw_db() if db.is_enabled() else _read_raw_file()
+        if day_requests <= current["most_requests_in_day"]:
+            return False
+        current["most_requests_in_day"] = day_requests
+        current["most_requests_in_day_date"] = date_str
+        if db.is_enabled():
+            _write_raw_db(current)
+        else:
+            _write_raw_file(current)
+        return True
+
+
+def record_best_week_avg(avg_bytes: float, start_date: str, end_date: str) -> bool:
+    """Updates the record only if avg_bytes is a new high. Returns whether
+    it actually changed anything."""
+    with _lock:
+        current = _read_raw_db() if db.is_enabled() else _read_raw_file()
+        if avg_bytes <= current["best_week_avg_bandwidth_bytes"]:
+            return False
+        current["best_week_avg_bandwidth_bytes"] = avg_bytes
+        current["best_week_avg_start_date"] = start_date
+        current["best_week_avg_end_date"] = end_date
         if db.is_enabled():
             _write_raw_db(current)
         else:
