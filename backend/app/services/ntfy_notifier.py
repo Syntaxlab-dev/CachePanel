@@ -40,22 +40,23 @@ def _publish(server_url: str, topic: str, title: str, message: str, priority: st
         return False
 
 
-def notify_prefill_success(server_url: str, topic: str, service: str, duration_seconds: float) -> None:
-    _publish(server_url, topic, "CachePanel", f"{service} prefill finished successfully in {duration_seconds:.0f}s.")
+def notify_prefill_success(
+    server_url: str, topic: str, service: str, duration_seconds: float, template: str | None = None
+) -> None:
+    text = template or f"{service} prefill finished successfully in {duration_seconds:.0f}s."
+    _publish(server_url, topic, "CachePanel", text)
 
 
-def notify_prefill_failure(server_url: str, topic: str, service: str, exit_code: int) -> None:
-    _publish(server_url, topic, "CachePanel", f"{service} prefill failed (exit code {exit_code}).", priority="high")
+def notify_prefill_failure(
+    server_url: str, topic: str, service: str, exit_code: int, template: str | None = None
+) -> None:
+    text = template or f"{service} prefill failed (exit code {exit_code})."
+    _publish(server_url, topic, "CachePanel", text, priority="high")
 
 
-def notify_disk_warning(server_url: str, topic: str, percent_used: float) -> None:
-    _publish(
-        server_url,
-        topic,
-        "CachePanel",
-        f"LanCache disk is {percent_used:.0f}% full. Consider clearing old cache data in CachePanel.",
-        priority="high",
-    )
+def notify_disk_warning(server_url: str, topic: str, percent_used: float, template: str | None = None) -> None:
+    text = template or f"LanCache disk is {percent_used:.0f}% full. Consider clearing old cache data in CachePanel."
+    _publish(server_url, topic, "CachePanel", text, priority="high")
 
 
 def notify_auto_cleanup(server_url: str, topic: str, deleted_count: int) -> None:
@@ -67,14 +68,24 @@ def notify_auto_cleanup(server_url: str, topic: str, deleted_count: int) -> None
     )
 
 
-def notify_traffic_alert(server_url: str, topic: str, service: str, gb_used: float, threshold_gb: float) -> None:
+def notify_traffic_alert(
+    server_url: str, topic: str, service: str, gb_used: float, threshold_gb: float, template: str | None = None
+) -> None:
+    text = template or (
+        f"{service} traffic in the last 24h ({gb_used:.1f} GB) crossed the configured alert threshold "
+        f"({threshold_gb:.1f} GB)."
+    )
+    _publish(server_url, topic, "CachePanel", text, priority="high")
+
+
+def notify_monthly_budget(server_url: str, topic: str, gb_used: float, budget_gb: float, percent: float, exceeded: bool) -> None:
+    verb = "exceeded" if exceeded else f"reached {percent:.0f}% of"
     _publish(
         server_url,
         topic,
         "CachePanel",
-        f"{service} traffic in the last 24h ({gb_used:.1f} GB) crossed the configured alert threshold "
-        f"({threshold_gb:.1f} GB).",
-        priority="high",
+        f"This month's cache traffic ({gb_used:.1f} GB) has {verb} the configured monthly budget ({budget_gb:.1f} GB).",
+        priority="high" if exceeded else "default",
     )
 
 

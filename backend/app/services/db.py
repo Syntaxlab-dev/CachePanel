@@ -154,6 +154,19 @@ _SCHEMA_STATEMENTS = [
         user_agent TEXT NOT NULL
     )
     """,
+    # Append-only security/admin action log (4th feature round, Welle 3) --
+    # see audit_log_store.py. id is the ordering key the cap-enforcing
+    # DELETE ... ORDER BY id there relies on, same pattern as run_history.
+    """
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id SERIAL PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        action TEXT NOT NULL,
+        username TEXT NOT NULL,
+        detail TEXT NOT NULL,
+        client_ip TEXT NOT NULL
+    )
+    """,
 ]
 
 # Run unconditionally, after _SCHEMA_STATEMENTS, on every startup -- each

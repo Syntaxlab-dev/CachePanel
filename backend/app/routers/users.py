@@ -15,10 +15,10 @@ accounts but can't create or remove any, without this router needing its
 own role check.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from app.services import auth_credentials_store
+from app.services import audit_log_store, auth_credentials_store
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -31,13 +31,17 @@ class NewUser(BaseModel):
     role: str = "admin"
 
 
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
 @router.get("", summary="List panel accounts", description="Usernames and roles only, never password hashes or TOTP secrets.")
 def list_users():
     return {"users": auth_credentials_store.list_users()}
 
 
 @router.post("", summary="Add a panel account")
-def add_user(body: NewUser):
+def add_user(body: NewUser, request: Request):
     username = body.username.strip()
     if not username or len(body.password) < 8:
         raise HTTPException(
@@ -49,11 +53,14 @@ def add_user(body: NewUser):
         auth_credentials_store.add_user(username, body.password, body.role)
     except ValueError:
         raise HTTPException(status_code=409, detail="Dieser Benutzername ist bereits vergeben.")
+    audit_log_store.log(
+        "user_created", request.session.get("username"), f"username={username} role={body.role}", _client_ip(request)
+    )
     return {"ok": True}
 
 
 @router.delete("/{username}", summary="Remove a panel account")
-def remove_user(username: str):
+def remove_user(username: str, request: Request):
     try:
         auth_credentials_store.remove_user(username)
     except ValueError as exc:
@@ -62,4 +69,7 @@ def remove_user(username: str):
                 status_code=400, detail="Der letzte verbleibende Zugang kann nicht entfernt werden."
             )
         raise HTTPException(status_code=404, detail="Unbekannter Benutzer.")
+    audit_log_store.log(
+        "user_deleted", request.session.get("username"), f"username={username}", _client_ip(request)
+    )
     return {"ok": True}

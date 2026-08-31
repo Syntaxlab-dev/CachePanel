@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from app.services import audit_log_store
 from app.services.cache_manager import (
     CacheManagerError,
     clean_corrupted_files,
@@ -10,12 +11,19 @@ from app.services.cache_manager import (
 router = APIRouter(prefix="/api/cache", tags=["cache"])
 
 
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
 @router.post("/clear", summary="Clear the entire LanCache cache", description="Wipes cached content for ALL services at once (targeted per-service purge isn't safely possible -- see cache_manager.py) and restarts the lancache container.")
-def clear_cache():
+def clear_cache(request: Request):
     try:
         message = clear_entire_cache()
     except CacheManagerError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audit_log_store.log(
+        "cache_cleared", request.session.get("username"), "Full cache clear requested", _client_ip(request)
+    )
     return {"message": message}
 
 
@@ -43,9 +51,12 @@ def scan_cache():
     description="Deletes exactly the files the scan would find (recomputed server-side, not client-supplied "
     "paths) and restarts lancache so its cache index stays consistent.",
 )
-def clean_corrupted():
+def clean_corrupted(request: Request):
     try:
         message = clean_corrupted_files()
     except CacheManagerError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audit_log_store.log(
+        "cache_cleaned", request.session.get("username"), "Corrupted (0-byte) files deleted", _client_ip(request)
+    )
     return {"message": message}

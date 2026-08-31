@@ -98,3 +98,33 @@ def get_range(days: int) -> list[dict]:
             all_days = sorted(_read_all_file(), key=lambda d: d["date"], reverse=True)
             result = all_days[:days]
     return list(reversed(result))
+
+
+def get_month_total(month: str) -> dict:
+    """Sums every recorded day whose date starts with `month` (a "YYYY-MM"
+    string) -- the monthly-budget feature's source of truth for "how much
+    traffic this calendar month", deliberately NOT log_parser.py's
+    aggregate_service_stats()/traffic_timeline(): those read a *bounded*
+    tail of the access log (max_lines, see log_parser.py), which a busy
+    LanCache can blow through in well under a month, silently undercounting
+    everything before that point. This store's rows are a real one-per-day
+    running total instead, with no such window.
+
+    Returns zeros (not an error) for a month with no recorded days yet --
+    same "empty state is honest, not broken" contract as get_range()'s own
+    "fewer days than requested" case."""
+    with _lock:
+        if db.is_enabled():
+            with db.get_connection() as conn:
+                row = conn.execute(
+                    "SELECT COALESCE(SUM(hit_bytes), 0), COALESCE(SUM(miss_bytes), 0), "
+                    "COALESCE(SUM(total_requests), 0) FROM daily_stats WHERE date LIKE %s",
+                    (f"{month}%",),
+                ).fetchone()
+            hit_bytes, miss_bytes, total_requests = row if row else (0, 0, 0)
+        else:
+            days = [d for d in _read_all_file() if d["date"].startswith(month)]
+            hit_bytes = sum(d["hit_bytes"] for d in days)
+            miss_bytes = sum(d["miss_bytes"] for d in days)
+            total_requests = sum(d["total_requests"] for d in days)
+    return {"hit_bytes": hit_bytes, "miss_bytes": miss_bytes, "total_requests": total_requests}

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.services import (
     app_settings_store,
+    audit_log_store,
     auth_credentials_store,
     login_rate_limit,
     session_registry_store,
@@ -95,6 +96,7 @@ def auth_setup(body: Credentials, request: Request):
         )
     auth_credentials_store.set_credentials(body.username.strip(), body.password)
     _start_session(request, body.username.strip(), "admin")
+    audit_log_store.log("setup", body.username.strip(), "Initial admin account created", _client_ip(request))
     return {"ok": True}
 
 
@@ -121,6 +123,7 @@ def auth_login(body: Credentials, request: Request):
     user = auth_credentials_store.get_user(username)
     if user is None or not auth_credentials_store.verify_credentials(username, body.password):
         login_rate_limit.record_failure(client_ip)
+        audit_log_store.log("login_failed", username or None, "Password rejected", client_ip)
         raise HTTPException(status_code=401, detail="Benutzername oder Passwort falsch.")
 
     if user["totp_enabled"]:
@@ -129,11 +132,14 @@ def auth_login(body: Credentials, request: Request):
         # NOT called yet, so a correct password doesn't reset the rate
         # limit before the TOTP step has also passed (see auth_login_totp()
         # below, which shares the same IP-keyed limiter for the code step).
+        # Not logged as a login yet either, for the same reason -- only a
+        # completed login (see auth_login_totp()) is a "login_success".
         request.session["pending_totp_username"] = username
         return {"ok": True, "totp_required": True}
 
     login_rate_limit.record_success(client_ip)
     _start_session(request, username, user["role"])
+    audit_log_store.log("login_success", username, "Logged in", client_ip)
     return {"ok": True, "totp_required": False}
 
 
@@ -162,15 +168,18 @@ def auth_login_totp(body: TotpCode, request: Request):
         # Account was removed or 2FA disabled mid-flow -- fail closed.
         request.session.pop("pending_totp_username", None)
         login_rate_limit.record_failure(client_ip)
+        audit_log_store.log("login_failed", username, "TOTP step failed: account/2FA no longer valid", client_ip)
         raise HTTPException(status_code=401, detail="Anmeldung fehlgeschlagen.")
 
     if not pyotp.TOTP(user["totp_secret"]).verify(body.code.strip()):
         login_rate_limit.record_failure(client_ip)
+        audit_log_store.log("login_failed", username, "TOTP code rejected", client_ip)
         raise HTTPException(status_code=401, detail="Code ungültig.")
 
     login_rate_limit.record_success(client_ip)
     request.session.pop("pending_totp_username", None)
     _start_session(request, username, user["role"])
+    audit_log_store.log("login_success", username, "Logged in (2FA)", client_ip)
     return {"ok": True}
 
 
@@ -323,16 +332,19 @@ def webauthn_login_complete(body: WebauthnAuthenticationComplete, request: Reque
         username = webauthn_service.complete_authentication(request, body.credential)
     except webauthn_service.WebAuthnError:
         login_rate_limit.record_failure(client_ip)
+        audit_log_store.log("login_failed", None, "Passkey login failed", client_ip)
         raise HTTPException(status_code=401, detail="Passkey-Anmeldung fehlgeschlagen.")
 
     user = auth_credentials_store.get_user(username)
     if user is None:
         # Credential's account was removed since it was registered -- fail closed.
         login_rate_limit.record_failure(client_ip)
+        audit_log_store.log("login_failed", username, "Passkey login failed: account no longer exists", client_ip)
         raise HTTPException(status_code=401, detail="Passkey-Anmeldung fehlgeschlagen.")
 
     login_rate_limit.record_success(client_ip)
     _start_session(request, username, user["role"])
+    audit_log_store.log("login_success", username, "Logged in (passkey)", client_ip)
     return {"ok": True}
 
 

@@ -42,10 +42,10 @@ router).
 
 import base64
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.services import app_settings_store, auth_credentials_store, backup_builder, run_history_store, schedule_store
+from app.services import app_settings_store, audit_log_store, auth_credentials_store, backup_builder, run_history_store, schedule_store
 
 router = APIRouter(prefix="/api/backup", tags=["backup"])
 
@@ -75,7 +75,13 @@ class BackupBundle(BaseModel):
     "only decrypt successfully when restored on this same host; the panel login is included as its bcrypt "
     "hash, never a plaintext password.",
 )
-def get_backup():
+def get_backup(request: Request):
+    audit_log_store.log(
+        "backup_created",
+        request.session.get("username"),
+        "Full backup downloaded",
+        request.client.host if request.client else "unknown",
+    )
     return backup_builder.build_backup_bundle()
 
 
@@ -89,7 +95,7 @@ def get_backup():
     "rest of the bundle still succeeds. The panel login in the bundle is a bcrypt hash, not a plaintext "
     "password -- restoring it doesn't require (or allow) choosing a new password.",
 )
-def restore_backup(bundle: BackupBundle):
+def restore_backup(bundle: BackupBundle, request: Request):
     if bundle.schema_version != SCHEMA_VERSION:
         raise HTTPException(
             status_code=400,
@@ -108,4 +114,14 @@ def restore_backup(bundle: BackupBundle):
         users = [bundle.auth] if isinstance(bundle.auth, dict) else bundle.auth
         auth_credentials_store.restore_credentials(users)
 
+    # Logged with the CALLER's session username, which may be None -- this
+    # endpoint is also reachable pre-setup (see auth_guard.py's
+    # _SETUP_EXEMPT_PATHS), i.e. exactly the "./data was lost" recovery case
+    # this feature exists for, where nobody is logged in yet.
+    audit_log_store.log(
+        "backup_restored",
+        request.session.get("username"),
+        "Full backup restored",
+        request.client.host if request.client else "unknown",
+    )
     return {"ok": True}

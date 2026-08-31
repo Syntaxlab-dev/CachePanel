@@ -12,7 +12,15 @@ from dataclasses import dataclass
 import docker
 from docker.errors import DockerException, NotFound
 
-from app.services import app_settings_store, discord_notifier, ntfy_notifier, run_history_store, webpush_notifier
+from app.services import (
+    app_settings_store,
+    discord_notifier,
+    notification_templates,
+    ntfy_notifier,
+    quiet_hours,
+    run_history_store,
+    webpush_notifier,
+)
 from app.settings import settings
 
 PREFILL_COMMANDS: dict[str, tuple[str, list[str]]] = {
@@ -47,14 +55,25 @@ def _notify_run_result(service: str, exit_code: int, duration_seconds: float) ->
     discord_notify_success/_failure so there's still just one on/off pair
     to configure, not three."""
     cfg = app_settings_store.get_settings()
+    templates = cfg.get("notification_templates") or {}
+
+    # Success is suppressed during quiet hours (routine, can wait);
+    # failure never is (actionable, stays critical) -- see
+    # quiet_hours.py's own docstring for the full reasoning.
+    success_suppressed = exit_code == 0 and quiet_hours.is_quiet_now(cfg)
+
+    success_template = notification_templates.render(
+        "prefill_success", templates, service=service, duration=f"{duration_seconds:.0f}"
+    )
+    failure_template = notification_templates.render("prefill_failure", templates, service=service, exit_code=exit_code)
 
     try:
         webhook_url = cfg.get("discord_webhook_url") or ""
         if webhook_url:
-            if exit_code == 0 and cfg.get("discord_notify_success"):
-                discord_notifier.notify_prefill_success(webhook_url, service, duration_seconds)
+            if exit_code == 0 and cfg.get("discord_notify_success") and not success_suppressed:
+                discord_notifier.notify_prefill_success(webhook_url, service, duration_seconds, template=success_template)
             elif exit_code != 0 and cfg.get("discord_notify_failure"):
-                discord_notifier.notify_prefill_failure(webhook_url, service, exit_code)
+                discord_notifier.notify_prefill_failure(webhook_url, service, exit_code, template=failure_template)
     except Exception:
         logging.getLogger("cachepanel.discord").exception("Failed to send prefill-result notification")
 
@@ -62,18 +81,20 @@ def _notify_run_result(service: str, exit_code: int, duration_seconds: float) ->
         ntfy_server = cfg.get("ntfy_server_url") or ""
         ntfy_topic = cfg.get("ntfy_topic") or ""
         if ntfy_topic:
-            if exit_code == 0 and cfg.get("discord_notify_success"):
-                ntfy_notifier.notify_prefill_success(ntfy_server, ntfy_topic, service, duration_seconds)
+            if exit_code == 0 and cfg.get("discord_notify_success") and not success_suppressed:
+                ntfy_notifier.notify_prefill_success(
+                    ntfy_server, ntfy_topic, service, duration_seconds, template=success_template
+                )
             elif exit_code != 0 and cfg.get("discord_notify_failure"):
-                ntfy_notifier.notify_prefill_failure(ntfy_server, ntfy_topic, service, exit_code)
+                ntfy_notifier.notify_prefill_failure(ntfy_server, ntfy_topic, service, exit_code, template=failure_template)
     except Exception:
         logging.getLogger("cachepanel.ntfy").exception("Failed to send prefill-result notification")
 
     try:
-        if exit_code == 0 and cfg.get("discord_notify_success"):
-            webpush_notifier.notify_prefill_success(service, duration_seconds)
+        if exit_code == 0 and cfg.get("discord_notify_success") and not success_suppressed:
+            webpush_notifier.notify_prefill_success(service, duration_seconds, template=success_template)
         elif exit_code != 0 and cfg.get("discord_notify_failure"):
-            webpush_notifier.notify_prefill_failure(service, exit_code)
+            webpush_notifier.notify_prefill_failure(service, exit_code, template=failure_template)
     except Exception:
         logging.getLogger("cachepanel.webpush").exception("Failed to send prefill-result notification")
 

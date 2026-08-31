@@ -1,10 +1,22 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from app.services import app_settings_store, cache_report, discord_notifier, ntfy_notifier, scheduler_service, update_check
+from app.services import (
+    app_settings_store,
+    audit_log_store,
+    cache_report,
+    discord_notifier,
+    notification_templates,
+    ntfy_notifier,
+    scheduler_service,
+    update_check,
+)
 from app.settings import settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
 
 
 class SettingsUpdate(BaseModel):
@@ -34,6 +46,18 @@ class SettingsUpdate(BaseModel):
     display_party_name: str | None = None
     ip_allowlist: list[str] | None = None
     api_token_rate_limit_per_minute: int | None = None
+    quiet_hours_enabled: bool | None = None
+    quiet_hours_start_hour: int | None = None
+    quiet_hours_start_minute: int | None = None
+    quiet_hours_end_hour: int | None = None
+    quiet_hours_end_minute: int | None = None
+    notification_templates: dict[str, str] | None = None
+    monthly_budget_gb: float | None = None
+
+
+class TemplatePreviewRequest(BaseModel):
+    event_key: str
+    template: str
 
 
 class NotificationTestRequest(BaseModel):
@@ -51,15 +75,49 @@ def get_settings(request: Request):
 
 
 @router.post("", summary="Update app settings", description="Partial update -- only non-null fields in the body are changed.")
-def update_settings(body: SettingsUpdate):
+def update_settings(body: SettingsUpdate, request: Request):
     partial = {k: v for k, v in body.model_dump().items() if v is not None}
+
+    if "notification_templates" in partial:
+        for event_key, template in partial["notification_templates"].items():
+            try:
+                notification_templates.validate(event_key, template)
+            except notification_templates.TemplateError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     updated = app_settings_store.update_settings(partial)
+
+    # Field NAMES only, never values -- secrets (Steam/SteamGridDB API keys,
+    # Discord webhook URL, ...) live among these fields, so the audit trail
+    # records that e.g. discord_webhook_url changed without ever writing
+    # what it changed to or from.
+    if partial:
+        audit_log_store.log(
+            "settings_changed",
+            request.session.get("username"),
+            f"Changed: {', '.join(sorted(partial.keys()))}",
+            _client_ip(request),
+        )
+
     # Cheap either way (just a remove+re-add of one job each) -- always
     # reload rather than only when a relevant field is present, same
     # unconditional style as routers/schedule.py's reload_jobs() call.
     scheduler_service.reload_report_job()
     scheduler_service.reload_auto_backup_job()
     return updated
+
+
+@router.post(
+    "/notification-templates/preview",
+    summary="Preview a notification template",
+    description="Renders `template` against fixed sample data for `event_key`, without saving it -- validates "
+    "placeholders the same way a real save would, so an invalid template surfaces here first.",
+)
+def preview_notification_template(body: TemplatePreviewRequest):
+    try:
+        return {"preview": notification_templates.preview(body.event_key, body.template)}
+    except notification_templates.TemplateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post(

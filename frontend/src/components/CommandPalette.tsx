@@ -52,6 +52,16 @@ export function CommandPalette() {
         run: () => navigate("/battlenet"),
       },
       { id: "nav-epic", label: t("nav.epic"), keywords: "epic games", run: () => navigate("/epic") },
+      ...(isAdmin
+        ? [
+            {
+              id: "nav-audit-log",
+              label: t("nav.auditLog"),
+              keywords: "audit log security history who did what",
+              run: () => navigate("/audit-log"),
+            },
+          ]
+        : []),
       { id: "nav-settings", label: t("nav.settings"), keywords: "settings config", run: () => navigate("/settings") },
     ];
 
@@ -65,6 +75,9 @@ export function CommandPalette() {
       { id: "section-heartbeat", label: t("settings.heartbeat"), keywords: "heartbeat uptime healthchecks" },
       { id: "section-ntfy", label: t("settings.ntfy"), keywords: "ntfy notifications" },
       { id: "section-webpush", label: t("settings.webpush"), keywords: "web push notifications browser pwa" },
+      { id: "section-quiet-hours", label: t("settings.quietHours"), keywords: "quiet hours do not disturb night" },
+      { id: "section-templates", label: t("settings.templates"), keywords: "notification templates custom text message" },
+      { id: "section-monthly-budget", label: t("settings.monthlyBudget"), keywords: "monthly budget bandwidth traffic limit" },
       { id: "section-autobackup", label: t("settings.autoBackup"), keywords: "backup schedule automatic" },
       { id: "section-autocleanup", label: t("settings.autoCleanup"), keywords: "cleanup corruption" },
       ...(isAdmin

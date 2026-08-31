@@ -6,6 +6,7 @@ import {
   Swords,
   Rocket,
   Database,
+  ScrollText,
   Settings as SettingsIcon,
   Sun,
   Moon,
@@ -23,14 +24,18 @@ import { CommandPalette } from "@/components/CommandPalette";
 export function Layout() {
   const [theme, setThemeState] = useState<Theme>(() => getPreferredTheme());
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const { logout } = useAuth();
+  const { logout, role } = useAuth();
   const { t, lang, setLang } = useI18n();
+  const isAdmin = role === "admin";
 
   const NAV_ITEMS = [
     { to: "/", label: t("nav.dashboard"), icon: LayoutDashboard, end: true },
     { to: "/steam", label: t("nav.steam"), icon: Gamepad2 },
     { to: "/battlenet", label: t("nav.battlenet"), icon: Swords },
     { to: "/epic", label: t("nav.epic"), icon: Rocket },
+    // Admin-only: the page itself also enforces this (backend returns 403
+    // for a viewer), this just avoids advertising a link a viewer can't use.
+    ...(isAdmin ? [{ to: "/audit-log", label: t("nav.auditLog"), icon: ScrollText }] : []),
     { to: "/settings", label: t("nav.settings"), icon: SettingsIcon },
   ];
 

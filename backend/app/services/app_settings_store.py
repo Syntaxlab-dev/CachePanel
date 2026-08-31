@@ -90,6 +90,31 @@ _DEFAULTS = {
     # available as an explicit opt-out for anyone who relied on that,
     # while new installs get a real default cap.
     "api_token_rate_limit_per_minute": 60,
+    # Quiet hours (4th feature round, Welle 3) -- see services/quiet_hours.py
+    # for which notifications this suppresses vs. leaves untouched, and why.
+    # Off by default; the two start/end fields follow the same hour/minute-
+    # int convention as report_hour/report_minute rather than a "HH:MM"
+    # string, for the same reason (a plain <input type=time> maps directly
+    # to two ints, no parsing needed on either side).
+    "quiet_hours_enabled": False,
+    "quiet_hours_start_hour": 22,
+    "quiet_hours_start_minute": 0,
+    "quiet_hours_end_hour": 8,
+    "quiet_hours_end_minute": 0,
+    # Per-event custom notification text (4th feature round, Welle 3) --
+    # see services/notification_templates.py. Empty dict = every event uses
+    # its existing hardcoded default text, unchanged; a key only needs to
+    # be present here for events the user has actually customized.
+    "notification_templates": {},
+    # Monthly bandwidth-saved budget (4th feature round, Welle 3) -- see
+    # scheduler_service.py's _check_monthly_budget job and
+    # daily_stats_store.get_month_total(). 0 = off, same contract as
+    # traffic_alert_threshold_gb above. Unlike that field (a bounded-log-tail
+    # 24h reading), this is evaluated against daily_stats_store's real
+    # per-day running total, since a calendar month is far wider than what
+    # the access-log tail read can reliably cover -- see
+    # daily_stats_store.get_month_total()'s own docstring.
+    "monthly_budget_gb": 0.0,
 }
 
 

@@ -6,6 +6,7 @@ import { Steam } from "@/pages/Steam";
 import { BattleNet } from "@/pages/BattleNet";
 import { Epic } from "@/pages/Epic";
 import { Settings } from "@/pages/Settings";
+import { AuditLog } from "@/pages/AuditLog";
 import { Setup } from "@/pages/Setup";
 import { Login } from "@/pages/Login";
 import { PublicDisplay } from "@/pages/PublicDisplay";
@@ -33,6 +34,7 @@ function Gate() {
         <Route path="steam" element={<Steam />} />
         <Route path="battlenet" element={<BattleNet />} />
         <Route path="epic" element={<Epic />} />
+        <Route path="audit-log" element={<AuditLog />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>

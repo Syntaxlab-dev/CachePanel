@@ -92,6 +92,23 @@ export interface AppSettings {
   display_party_name: string;
   ip_allowlist: string[];
   api_token_rate_limit_per_minute: number;
+  quiet_hours_enabled: boolean;
+  quiet_hours_start_hour: number;
+  quiet_hours_start_minute: number;
+  quiet_hours_end_hour: number;
+  quiet_hours_end_minute: number;
+  notification_templates: Record<string, string>;
+  monthly_budget_gb: number;
+}
+
+export type NotificationTemplateEvent = "prefill_success" | "prefill_failure" | "disk_warning" | "traffic_alert" | "weekly_report";
+
+export interface AuditLogEntry {
+  timestamp: string;
+  action: string;
+  username: string;
+  detail: string;
+  client_ip: string;
 }
 
 // GET /api/settings only -- carries the caller's own current IP alongside
@@ -360,6 +377,24 @@ export const api = {
     }),
   getVersion: () => request<VersionInfo>("/api/settings/version"),
   checkForUpdate: () => request<UpdateCheckResult>("/api/settings/update-check"),
+  previewNotificationTemplate: (eventKey: NotificationTemplateEvent, template: string) =>
+    request<{ preview: string }>("/api/settings/notification-templates/preview", {
+      method: "POST",
+      body: JSON.stringify({ event_key: eventKey, template }),
+    }),
+
+  auditLog: (params: { action?: string; username?: string; q?: string; since?: string; until?: string; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params.action) query.set("action", params.action);
+    if (params.username) query.set("username", params.username);
+    if (params.q) query.set("q", params.q);
+    if (params.since) query.set("since", params.since);
+    if (params.until) query.set("until", params.until);
+    if (params.limit) query.set("limit", String(params.limit));
+    const qs = query.toString();
+    return request<{ entries: AuditLogEntry[] }>(`/api/audit-log${qs ? `?${qs}` : ""}`);
+  },
+  auditLogActions: () => request<{ actions: string[] }>("/api/audit-log/actions"),
 
   getBackup: () => request<BackupBundle>("/api/backup"),
   restoreBackup: (bundle: BackupBundle) =>

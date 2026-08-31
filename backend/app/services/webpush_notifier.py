@@ -57,36 +57,46 @@ def _send_to_all(title: str, body: str) -> None:
             logger.exception("Web push delivery failed unexpectedly")
 
 
-def notify_prefill_success(service: str, duration_seconds: float) -> None:
-    _send_to_all("CachePanel", f"{service} prefill finished successfully in {duration_seconds:.0f}s.")
+def notify_prefill_success(service: str, duration_seconds: float, template: str | None = None) -> None:
+    _send_to_all("CachePanel", template or f"{service} prefill finished successfully in {duration_seconds:.0f}s.")
 
 
-def notify_prefill_failure(service: str, exit_code: int) -> None:
-    _send_to_all("CachePanel", f"{service} prefill failed (exit code {exit_code}).")
+def notify_prefill_failure(service: str, exit_code: int, template: str | None = None) -> None:
+    _send_to_all("CachePanel", template or f"{service} prefill failed (exit code {exit_code}).")
 
 
-def notify_disk_warning(percent_used: float) -> None:
-    _send_to_all("CachePanel", f"LanCache disk is {percent_used:.0f}% full. Consider clearing old cache data.")
+def notify_disk_warning(percent_used: float, template: str | None = None) -> None:
+    _send_to_all("CachePanel", template or f"LanCache disk is {percent_used:.0f}% full. Consider clearing old cache data.")
 
 
 def notify_auto_cleanup(deleted_count: int) -> None:
     _send_to_all("CachePanel", f"Automatically removed {deleted_count} corrupted (0-byte) cache file(s).")
 
 
-def notify_traffic_alert(service: str, gb_used: float, threshold_gb: float) -> None:
+def notify_traffic_alert(service: str, gb_used: float, threshold_gb: float, template: str | None = None) -> None:
+    text = template or (
+        f"{service} traffic in the last 24h ({gb_used:.1f} GB) crossed the configured alert threshold "
+        f"({threshold_gb:.1f} GB)."
+    )
+    _send_to_all("CachePanel", text)
+
+
+def notify_monthly_budget(gb_used: float, budget_gb: float, percent: float, exceeded: bool) -> None:
+    verb = "exceeded" if exceeded else f"reached {percent:.0f}% of"
     _send_to_all(
         "CachePanel",
-        f"{service} traffic in the last 24h ({gb_used:.1f} GB) crossed the configured alert threshold "
-        f"({threshold_gb:.1f} GB).",
+        f"This month's cache traffic ({gb_used:.1f} GB) has {verb} the configured monthly budget ({budget_gb:.1f} GB).",
     )
 
 
-def notify_cache_report(total_requests: int, hit_ratio: float, bandwidth_saved_gb: float) -> None:
-    _send_to_all(
-        "CachePanel — weekly report",
+def notify_cache_report(
+    total_requests: int, hit_ratio: float, bandwidth_saved_gb: float, template: str | None = None
+) -> None:
+    text = template or (
         f"{total_requests:,} requests, {hit_ratio * 100:.0f}% served from cache, "
-        f"{bandwidth_saved_gb:.1f} GB saved.",
+        f"{bandwidth_saved_gb:.1f} GB saved."
     )
+    _send_to_all("CachePanel — weekly report", text)
 
 
 def send_test_message() -> int:

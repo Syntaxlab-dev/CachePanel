@@ -549,6 +549,47 @@ const dictionaries = {
     "settings.homeAssistantCopy": "YAML kopieren",
     "settings.homeAssistantCopied": "YAML-Vorlage kopiert.",
 
+    "nav.auditLog": "Änderungsprotokoll",
+
+    "auditLog.title": "Änderungsprotokoll",
+    "auditLog.subtitle": "Wer hat wann was gemacht — Logins, Einstellungsänderungen, Downloads und mehr.",
+    "auditLog.adminOnly": "Nur für Admin-Zugänge sichtbar.",
+    "auditLog.filters": "Filter",
+    "auditLog.searchPlaceholder": "Details durchsuchen…",
+    "auditLog.usernamePlaceholder": "Benutzername…",
+    "auditLog.allActions": "Alle Aktionen",
+    "auditLog.entries": "Einträge",
+    "auditLog.noMatch": "Keine Einträge gefunden.",
+
+    "settings.quietHours": "Ruhezeiten",
+    "settings.quietHoursTooltip":
+      "Unterdrückt nicht-dringende Benachrichtigungen (Prefill-Erfolg, Wochenreport, Traffic-Alarm, Aufräum-Hinweis) in diesem Zeitfenster. Speicherplatz-Warnung und Prefill-Fehlschläge bleiben immer aktiv.",
+    "settings.quietHoursEnabled": "Ruhezeiten aktivieren",
+    "settings.quietHoursStart": "Von",
+    "settings.quietHoursEnd": "Bis",
+    "settings.quietHoursHint":
+      "Gilt für die Server-Ortszeit. Ein Zeitfenster über Mitternacht hinweg (z. B. 22:00–08:00) wird korrekt behandelt.",
+
+    "settings.templates": "Nachrichtenvorlagen",
+    "settings.templatesTooltip":
+      "Eigener Text für Benachrichtigungen — leer lässt den bisherigen Standardtext unverändert. Derselbe Text geht an Discord, ntfy und Web-Push.",
+    "settings.templateEvent.prefill_success": "Prefill erfolgreich",
+    "settings.templateEvent.prefill_failure": "Prefill fehlgeschlagen",
+    "settings.templateEvent.disk_warning": "Speicherplatz-Warnung",
+    "settings.templateEvent.traffic_alert": "Traffic-Alarm",
+    "settings.templateEvent.weekly_report": "Wochenreport",
+    "settings.templatesPlaceholdersLabel": "Verfügbare Platzhalter:",
+    "settings.templatesPlaceholderHint": "Leer lassen für den Standardtext…",
+    "settings.templatesPreview": "Vorschau",
+    "settings.templatesPreviewFailed": "Vorschau fehlgeschlagen — unbekannter Platzhalter?",
+    "settings.templatesHint": "Nur die oben gelisteten Platzhalter sind pro Ereignis erlaubt.",
+
+    "settings.monthlyBudget": "Monats-Budget",
+    "settings.monthlyBudgetTooltip":
+      "Warnt bei 80% und bei Erreichen des monatlichen Bandbreiten-Sparziels (aus dem Cache bediente Daten des laufenden Kalendermonats).",
+    "settings.monthlyBudgetLabel": "Monatliches Sparziel (GB)",
+    "settings.monthlyBudgetHint": "0 = deaktiviert. Basiert auf den täglich gesammelten Langzeit-Trend-Daten, nicht auf dem kurzen Log-Ausschnitt.",
+
     "commandPalette.placeholder": "Seite oder Einstellung suchen…",
     "commandPalette.noResults": "Keine Treffer.",
   },
@@ -1090,6 +1131,47 @@ const dictionaries = {
       "Create an API token above first, then paste this template into your configuration.yaml with your real token filled in.",
     "settings.homeAssistantCopy": "Copy YAML",
     "settings.homeAssistantCopied": "YAML template copied.",
+
+    "nav.auditLog": "Audit Log",
+
+    "auditLog.title": "Audit Log",
+    "auditLog.subtitle": "Who did what, when — logins, settings changes, downloads, and more.",
+    "auditLog.adminOnly": "Visible to admin accounts only.",
+    "auditLog.filters": "Filters",
+    "auditLog.searchPlaceholder": "Search details…",
+    "auditLog.usernamePlaceholder": "Username…",
+    "auditLog.allActions": "All actions",
+    "auditLog.entries": "Entries",
+    "auditLog.noMatch": "No entries found.",
+
+    "settings.quietHours": "Quiet Hours",
+    "settings.quietHoursTooltip":
+      "Suppresses non-urgent notifications (prefill success, weekly report, traffic alert, cleanup notice) during this window. Disk warnings and prefill failures always stay on.",
+    "settings.quietHoursEnabled": "Enable quiet hours",
+    "settings.quietHoursStart": "From",
+    "settings.quietHoursEnd": "To",
+    "settings.quietHoursHint":
+      "Applies to the server's local time. A window spanning midnight (e.g. 22:00–08:00) is handled correctly.",
+
+    "settings.templates": "Notification Templates",
+    "settings.templatesTooltip":
+      "Custom text for notifications — leave blank to keep the existing default wording. The same text is sent to Discord, ntfy, and web push alike.",
+    "settings.templateEvent.prefill_success": "Prefill succeeded",
+    "settings.templateEvent.prefill_failure": "Prefill failed",
+    "settings.templateEvent.disk_warning": "Disk warning",
+    "settings.templateEvent.traffic_alert": "Traffic alert",
+    "settings.templateEvent.weekly_report": "Weekly report",
+    "settings.templatesPlaceholdersLabel": "Available placeholders:",
+    "settings.templatesPlaceholderHint": "Leave blank for the default text…",
+    "settings.templatesPreview": "Preview",
+    "settings.templatesPreviewFailed": "Preview failed — unknown placeholder?",
+    "settings.templatesHint": "Only the placeholders listed above are allowed per event.",
+
+    "settings.monthlyBudget": "Monthly Budget",
+    "settings.monthlyBudgetTooltip":
+      "Warns at 80% and again on reaching your monthly bandwidth-saved goal (cache-served data for the current calendar month).",
+    "settings.monthlyBudgetLabel": "Monthly savings goal (GB)",
+    "settings.monthlyBudgetHint": "0 = off. Based on the daily long-term trend data, not the short log-tail read.",
 
     "commandPalette.placeholder": "Search a page or setting…",
     "commandPalette.noResults": "No matches.",

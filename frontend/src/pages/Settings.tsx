@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation } from "react-router-dom";
-import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, ExternalLink, Fingerprint, Gauge, Heart, Home, Image, Info, KeyRound, LogIn, MonitorSmartphone, Network, Palette, Send, Share2, ShieldCheck, Smartphone, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, UserCircle2, Users, type LucideIcon } from "lucide-react";
+import { AlertCircle, Archive, Bell, CheckCircle2, Copy, Download, Eye, ExternalLink, Fingerprint, Gauge, Heart, Home, Image, Info, KeyRound, LogIn, MessageSquareText, MonitorSmartphone, Moon, Network, Palette, Send, Share2, ShieldCheck, Smartphone, Sparkles, Terminal, Trash2, Tv, Upload, UserPlus, UserCircle2, Users, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,9 @@ const SECTION_TAB_MAP: Record<string, SettingsTab> = {
   "section-heartbeat": "notifications",
   "section-ntfy": "notifications",
   "section-webpush": "notifications",
+  "section-quiet-hours": "notifications",
+  "section-templates": "notifications",
+  "section-monthly-budget": "notifications",
   "section-autobackup": "automation",
   "section-autocleanup": "automation",
   "section-api-tokens": "integrations",
@@ -134,6 +137,8 @@ export function Settings() {
   const [savingIpAllowlist, setSavingIpAllowlist] = useState(false);
   const [tokenRateLimitInput, setTokenRateLimitInput] = useState("");
   const [savingTokenRateLimit, setSavingTokenRateLimit] = useState(false);
+  const [templatePreviews, setTemplatePreviews] = useState<Record<string, string>>({});
+  const [previewingTemplate, setPreviewingTemplate] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const backupFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -659,6 +664,25 @@ export function Settings() {
     } finally {
       setSendingReport(false);
     }
+  }
+
+  async function handlePreviewTemplate(eventKey: string) {
+    const template = values?.notification_templates?.[eventKey] ?? "";
+    if (!template.trim()) return;
+    setPreviewingTemplate(eventKey);
+    try {
+      const result = await api.previewNotificationTemplate(eventKey as never, template);
+      setTemplatePreviews((prev) => ({ ...prev, [eventKey]: result.preview }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.templatesPreviewFailed"));
+    } finally {
+      setPreviewingTemplate(null);
+    }
+  }
+
+  function setTemplateValue(eventKey: string, template: string) {
+    if (!values) return;
+    setValues({ ...values, notification_templates: { ...values.notification_templates, [eventKey]: template } });
   }
 
   async function handleSaveDisplayToggle() {
@@ -1375,6 +1399,174 @@ export function Settings() {
                 <p className="text-xs text-[var(--muted)]">{t("settings.runHistoryLimitHint")}</p>
               </div>
 
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={isViewer || saving}>
+                  {saving ? t("settings.saving") : t("settings.save")}
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card id="section-quiet-hours">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Moon className="h-4 w-4" /> {t("settings.quietHours")}
+            <InfoTooltip text={t("settings.quietHoursTooltip")} />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!values ? (
+            <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={values.quiet_hours_enabled}
+                  disabled={isViewer}
+                  onChange={(e) => setValues({ ...values, quiet_hours_enabled: e.target.checked })}
+                />
+                {t("settings.quietHoursEnabled")}
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <label className="flex items-center gap-2 text-sm">
+                  {t("settings.quietHoursStart")}
+                  <input
+                    type="time"
+                    value={`${String(values.quiet_hours_start_hour).padStart(2, "0")}:${String(values.quiet_hours_start_minute).padStart(2, "0")}`}
+                    disabled={!values.quiet_hours_enabled || isViewer}
+                    onChange={(e) => {
+                      const [hour, minute] = e.target.value.split(":").map(Number);
+                      if (!Number.isNaN(hour) && !Number.isNaN(minute)) {
+                        setValues({ ...values, quiet_hours_start_hour: hour, quiet_hours_start_minute: minute });
+                      }
+                    }}
+                    className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] disabled:opacity-40"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  {t("settings.quietHoursEnd")}
+                  <input
+                    type="time"
+                    value={`${String(values.quiet_hours_end_hour).padStart(2, "0")}:${String(values.quiet_hours_end_minute).padStart(2, "0")}`}
+                    disabled={!values.quiet_hours_enabled || isViewer}
+                    onChange={(e) => {
+                      const [hour, minute] = e.target.value.split(":").map(Number);
+                      if (!Number.isNaN(hour) && !Number.isNaN(minute)) {
+                        setValues({ ...values, quiet_hours_end_hour: hour, quiet_hours_end_minute: minute });
+                      }
+                    }}
+                    className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] disabled:opacity-40"
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-[var(--muted)]">{t("settings.quietHoursHint")}</p>
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={isViewer || saving}>
+                  {saving ? t("settings.saving") : t("settings.save")}
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card id="section-templates">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquareText className="h-4 w-4" /> {t("settings.templates")}
+            <InfoTooltip text={t("settings.templatesTooltip")} />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!values ? (
+            <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              {(
+                [
+                  ["prefill_success", "{service} {duration}"],
+                  ["prefill_failure", "{service} {exit_code}"],
+                  ["disk_warning", "{percent}"],
+                  ["traffic_alert", "{service} {gb_used} {threshold_gb}"],
+                  ["weekly_report", "{requests} {hit_ratio} {bandwidth_saved}"],
+                ] as const
+              ).map(([eventKey, placeholders]) => (
+                <div key={eventKey} className="flex flex-col gap-1.5 border-t border-[var(--border)] pt-4 first:border-t-0 first:pt-0">
+                  <label htmlFor={`template-${eventKey}`} className="text-sm font-medium">
+                    {t(`settings.templateEvent.${eventKey}` as const)}
+                  </label>
+                  <p className="text-xs text-[var(--muted)]">
+                    {t("settings.templatesPlaceholdersLabel")} <code className="text-[var(--ink)]">{placeholders}</code>
+                  </p>
+                  <textarea
+                    id={`template-${eventKey}`}
+                    rows={2}
+                    value={values.notification_templates?.[eventKey] ?? ""}
+                    disabled={isViewer}
+                    onChange={(e) => setTemplateValue(eventKey, e.target.value)}
+                    placeholder={t("settings.templatesPlaceholderHint")}
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] disabled:opacity-60"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!values.notification_templates?.[eventKey]?.trim() || previewingTemplate === eventKey}
+                      onClick={() => handlePreviewTemplate(eventKey)}
+                    >
+                      <Eye className="h-3.5 w-3.5" /> {t("settings.templatesPreview")}
+                    </Button>
+                  </div>
+                  {templatePreviews[eventKey] && (
+                    <p className="rounded-lg bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
+                      {templatePreviews[eventKey]}
+                    </p>
+                  )}
+                </div>
+              ))}
+              <p className="text-xs text-[var(--muted)]">{t("settings.templatesHint")}</p>
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={isViewer || saving}>
+                  {saving ? t("settings.saving") : t("settings.save")}
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card id="section-monthly-budget">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Gauge className="h-4 w-4" /> {t("settings.monthlyBudget")}
+            <InfoTooltip text={t("settings.monthlyBudgetTooltip")} />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!values ? (
+            <p className="text-sm text-[var(--muted)]">{t("common.loading")}</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="monthly_budget_gb" className="text-sm font-medium">
+                  {t("settings.monthlyBudgetLabel")}
+                </label>
+                <Input
+                  id="monthly_budget_gb"
+                  type="number"
+                  min={0}
+                  step={1}
+                  className="max-w-32"
+                  value={values.monthly_budget_gb}
+                  disabled={isViewer}
+                  onChange={(e) => setValues({ ...values, monthly_budget_gb: Number(e.target.value) || 0 })}
+                />
+                <p className="text-xs text-[var(--muted)]">{t("settings.monthlyBudgetHint")}</p>
+              </div>
               <div className="flex items-center gap-3">
                 <Button type="submit" disabled={isViewer || saving}>
                   {saving ? t("settings.saving") : t("settings.save")}

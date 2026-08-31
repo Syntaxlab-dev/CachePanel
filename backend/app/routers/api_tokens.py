@@ -18,7 +18,7 @@ authenticated/viewer gate. Two reasons this isn't left to the guard alone:
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from app.services import api_token_store
+from app.services import api_token_store, audit_log_store
 
 router = APIRouter(prefix="/api/tokens", tags=["tokens"])
 
@@ -26,6 +26,10 @@ router = APIRouter(prefix="/api/tokens", tags=["tokens"])
 def _require_admin(request: Request) -> None:
     if request.session.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Nur für Admin-Zugänge.")
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
 
 
 class NewToken(BaseModel):
@@ -50,6 +54,7 @@ def create_token(body: NewToken, request: Request):
     if not label:
         raise HTTPException(status_code=400, detail="Bitte einen Namen für den Token vergeben.")
     raw_token = api_token_store.create_token(label)
+    audit_log_store.log("token_created", request.session.get("username"), f"label={label}", _client_ip(request))
     return {"token": raw_token}
 
 
@@ -57,4 +62,7 @@ def create_token(body: NewToken, request: Request):
 def delete_token(token_id: int, request: Request):
     _require_admin(request)
     api_token_store.delete_token(token_id)
+    audit_log_store.log(
+        "token_revoked", request.session.get("username"), f"token_id={token_id}", _client_ip(request)
+    )
     return {"ok": True}

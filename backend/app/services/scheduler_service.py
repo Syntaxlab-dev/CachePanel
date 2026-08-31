@@ -25,7 +25,9 @@ from app.services import (
     cache_report,
     daily_stats_store,
     discord_notifier,
+    notification_templates,
     ntfy_notifier,
+    quiet_hours,
     records_store,
     schedule_store,
     webpush_notifier,
@@ -59,6 +61,10 @@ _TRAFFIC_ALERT_JOB_ID = "traffic-alert-check"
 _TRAFFIC_ALERT_INTERVAL_MINUTES = 30
 _BYTES_PER_GB = 1024**3
 
+_MONTHLY_BUDGET_JOB_ID = "monthly-budget-check"
+_MONTHLY_BUDGET_INTERVAL_MINUTES = 60
+_MONTHLY_BUDGET_WARN_PERCENT = 80
+
 _RECORDS_SNAPSHOT_JOB_ID = "daily-records-snapshot"
 # Below this many requests in a day, a hit-ratio "record" would be
 # meaningless noise -- a quiet early morning with 2 requests and a lucky
@@ -75,6 +81,16 @@ _disk_warning_active = False
 # services can independently be above/below the traffic threshold at once,
 # a single bool can't represent that.
 _traffic_alert_active: dict[str, bool] = {}
+
+# Which calendar month (YYYY-MM) the two monthly-budget flags below apply
+# to -- reset whenever the current month no longer matches, so a new month
+# always starts able to re-warn/re-exceed. In-memory only, not persisted:
+# same "resets naturally on restart" trade-off _disk_warning_active and
+# _traffic_alert_active already make, which just means a restart mid-month
+# could in the worst case re-send one already-sent warning, never lose one.
+_budget_state_month: str | None = None
+_budget_warned = False
+_budget_exceeded = False
 
 
 def _run_job(service: str) -> None:
@@ -105,11 +121,18 @@ def _check_disk_warning() -> None:
 
     if usage.percent_used >= _DISK_WARNING_THRESHOLD_PERCENT:
         if not _disk_warning_active:
+            # Deliberately NOT quiet-hours-suppressed -- see quiet_hours.py's
+            # own docstring: a near-full cache disk is treated as critical.
+            template = notification_templates.render(
+                "disk_warning", cfg.get("notification_templates") or {}, percent=f"{usage.percent_used:.0f}"
+            )
             if webhook_url:
-                discord_notifier.notify_disk_warning(webhook_url, usage.percent_used)
+                discord_notifier.notify_disk_warning(webhook_url, usage.percent_used, template=template)
             if ntfy_topic:
-                ntfy_notifier.notify_disk_warning(cfg.get("ntfy_server_url") or "", ntfy_topic, usage.percent_used)
-            webpush_notifier.notify_disk_warning(usage.percent_used)
+                ntfy_notifier.notify_disk_warning(
+                    cfg.get("ntfy_server_url") or "", ntfy_topic, usage.percent_used, template=template
+                )
+            webpush_notifier.notify_disk_warning(usage.percent_used, template=template)
             _disk_warning_active = True
     else:
         _disk_warning_active = False
@@ -133,8 +156,19 @@ def _send_cache_report() -> None:
     cfg = app_settings_store.get_settings()
     if not cfg.get("report_enabled"):
         return
+    # Routine, not urgent -- suppressed during quiet hours (see
+    # quiet_hours.py's own docstring for the full reasoning).
+    if quiet_hours.is_quiet_now(cfg):
+        return
 
     summary = cache_report.build_report()
+    template = notification_templates.render(
+        "weekly_report",
+        cfg.get("notification_templates") or {},
+        requests=f"{summary['total_requests']:,}",
+        hit_ratio=f"{summary['hit_ratio'] * 100:.0f}",
+        bandwidth_saved=discord_notifier.format_bytes(summary["bandwidth_saved_bytes"]),
+    )
 
     webhook_url = cfg.get("discord_webhook_url") or ""
     if webhook_url:
@@ -145,6 +179,7 @@ def _send_cache_report() -> None:
             bandwidth_saved_bytes=summary["bandwidth_saved_bytes"],
             percent_used=summary["percent_used"],
             hours_until_full=summary["hours_until_full"],
+            template=template,
         )
     # Web push report is intentionally simpler (no disk/forecast line) --
     # see webpush_notifier.notify_cache_report()'s own signature; a no-op
@@ -153,6 +188,7 @@ def _send_cache_report() -> None:
         total_requests=summary["total_requests"],
         hit_ratio=summary["hit_ratio"],
         bandwidth_saved_gb=summary["bandwidth_saved_bytes"] / _BYTES_PER_GB,
+        template=template,
     )
 
 
@@ -170,6 +206,10 @@ def _run_auto_cleanup_check() -> None:
     cfg = app_settings_store.get_settings()
     if not cfg.get("auto_clean_corruption_enabled"):
         return
+    # The cleanup itself still runs on schedule regardless of quiet hours
+    # (it's a scan+delete, not a notification) -- only the after-the-fact
+    # notice below is what quiet hours suppresses.
+    quiet = quiet_hours.is_quiet_now(cfg)
 
     try:
         scan = cache_manager.scan_for_corruption()
@@ -183,6 +223,9 @@ def _run_auto_cleanup_check() -> None:
         cache_manager.clean_corrupted_files()
     except CacheManagerError:
         logger.exception("Auto-cleanup could not delete corrupted files")
+        return
+
+    if quiet:
         return
 
     webhook_url = cfg.get("discord_webhook_url") or ""
@@ -211,6 +254,8 @@ def _check_traffic_alert() -> None:
     entries = iter_access_entries(access_path, max_lines=100_000)
     stats_by_service = aggregate_service_stats(entries)
     threshold_bytes = threshold_gb * _BYTES_PER_GB
+    quiet = quiet_hours.is_quiet_now(cfg)
+    templates = cfg.get("notification_templates") or {}
 
     seen_services = set()
     for service, stat in stats_by_service.items():
@@ -219,13 +264,26 @@ def _check_traffic_alert() -> None:
         if total_bytes >= threshold_bytes:
             if not _traffic_alert_active.get(service):
                 gb_used = total_bytes / _BYTES_PER_GB
-                if webhook_url:
-                    discord_notifier.notify_traffic_alert(webhook_url, service, gb_used, threshold_gb)
-                if ntfy_topic:
-                    ntfy_notifier.notify_traffic_alert(
-                        cfg.get("ntfy_server_url") or "", ntfy_topic, service, gb_used, threshold_gb
+                # Routine threshold notice, not urgent -- suppressed during
+                # quiet hours (see quiet_hours.py). The active-flag still
+                # flips below either way, so a spell that started (and
+                # would have alerted) during quiet hours doesn't re-alert
+                # the moment the window ends for traffic that hasn't changed.
+                if not quiet:
+                    template = notification_templates.render(
+                        "traffic_alert",
+                        templates,
+                        service=service,
+                        gb_used=f"{gb_used:.1f}",
+                        threshold_gb=f"{threshold_gb:.1f}",
                     )
-                webpush_notifier.notify_traffic_alert(service, gb_used, threshold_gb)
+                    if webhook_url:
+                        discord_notifier.notify_traffic_alert(webhook_url, service, gb_used, threshold_gb, template=template)
+                    if ntfy_topic:
+                        ntfy_notifier.notify_traffic_alert(
+                            cfg.get("ntfy_server_url") or "", ntfy_topic, service, gb_used, threshold_gb, template=template
+                        )
+                    webpush_notifier.notify_traffic_alert(service, gb_used, threshold_gb, template=template)
                 _traffic_alert_active[service] = True
         else:
             _traffic_alert_active[service] = False
@@ -236,6 +294,59 @@ def _check_traffic_alert() -> None:
     for service in list(_traffic_alert_active):
         if service not in seen_services:
             _traffic_alert_active.pop(service, None)
+
+
+def _check_monthly_budget() -> None:
+    """Warns at _MONTHLY_BUDGET_WARN_PERCENT and again on exceeding 100%
+    of a configured monthly bandwidth-saved budget, each once per calendar
+    month. Reads daily_stats_store.py's real per-day running total for the
+    current month, NOT log_parser.py's bounded log-tail aggregation -- see
+    daily_stats_store.get_month_total()'s own docstring for why that
+    distinction matters here specifically (a month is far wider than what
+    the tail read reliably covers)."""
+    global _budget_state_month, _budget_warned, _budget_exceeded
+
+    cfg = app_settings_store.get_settings()
+    budget_gb = cfg.get("monthly_budget_gb") or 0
+    if not budget_gb:
+        return
+
+    current_month = datetime.now().strftime("%Y-%m")
+    if current_month != _budget_state_month:
+        _budget_state_month = current_month
+        _budget_warned = False
+        _budget_exceeded = False
+
+    totals = daily_stats_store.get_month_total(current_month)
+    gb_used = totals["hit_bytes"] / _BYTES_PER_GB
+    percent = (gb_used / budget_gb) * 100 if budget_gb else 0.0
+
+    webhook_url = cfg.get("discord_webhook_url") or ""
+    ntfy_topic = cfg.get("ntfy_topic") or ""
+    has_webpush = bool(webpush_subscriptions_store.list_subscriptions())
+    if not webhook_url and not ntfy_topic and not has_webpush:
+        return
+    # Informational, not urgent -- suppressed during quiet hours (see
+    # quiet_hours.py's own docstring).
+    if quiet_hours.is_quiet_now(cfg):
+        return
+
+    def _fire(exceeded: bool) -> None:
+        if webhook_url:
+            discord_notifier.notify_monthly_budget(webhook_url, gb_used, budget_gb, percent, exceeded)
+        if ntfy_topic:
+            ntfy_notifier.notify_monthly_budget(
+                cfg.get("ntfy_server_url") or "", ntfy_topic, gb_used, budget_gb, percent, exceeded
+            )
+        webpush_notifier.notify_monthly_budget(gb_used, budget_gb, percent, exceeded)
+
+    if percent >= 100 and not _budget_exceeded:
+        _fire(exceeded=True)
+        _budget_exceeded = True
+        _budget_warned = True  # exceeding implies the warn threshold was also crossed
+    elif percent >= _MONTHLY_BUDGET_WARN_PERCENT and not _budget_warned:
+        _fire(exceeded=False)
+        _budget_warned = True
 
 
 def _run_daily_records_snapshot() -> None:
@@ -365,6 +476,13 @@ def start_and_reload() -> None:
         trigger="interval",
         minutes=_TRAFFIC_ALERT_INTERVAL_MINUTES,
         id=_TRAFFIC_ALERT_JOB_ID,
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _check_monthly_budget,
+        trigger="interval",
+        minutes=_MONTHLY_BUDGET_INTERVAL_MINUTES,
+        id=_MONTHLY_BUDGET_JOB_ID,
         replace_existing=True,
     )
     _scheduler.add_job(
