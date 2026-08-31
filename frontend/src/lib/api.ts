@@ -142,6 +142,33 @@ export interface ApiToken {
   created_date: string;
 }
 
+export interface InstanceToken {
+  id: number;
+  label: string;
+  created_date: string;
+}
+
+export interface SlaveInstance {
+  id: number;
+  name: string;
+  base_url: string;
+  created_date: string;
+}
+
+export interface SlaveInstanceStatus {
+  id: number;
+  name: string;
+  base_url: string;
+  status: HaSensors | null;
+  error: string | null;
+}
+
+export interface RemotePrefillResult {
+  service: string;
+  exit_code: number;
+  output: string;
+}
+
 export interface LiveTickerEntry {
   timestamp: string;
   service: string;
@@ -492,6 +519,19 @@ export const api = {
     request<{ labels: Record<string, string> }>(`/api/client-labels/${encodeURIComponent(ip)}`, {
       method: "DELETE",
     }),
+
+  listInstanceTokens: () => request<{ tokens: InstanceToken[] }>("/api/instance-tokens"),
+  createInstanceToken: (label: string) =>
+    request<{ token: string }>("/api/instance-tokens", { method: "POST", body: JSON.stringify({ label }) }),
+  deleteInstanceToken: (id: number) => request<{ ok: boolean }>(`/api/instance-tokens/${id}`, { method: "DELETE" }),
+
+  listInstances: () => request<{ instances: SlaveInstance[] }>("/api/instances"),
+  addInstance: (name: string, base_url: string, token: string) =>
+    request<{ id: number }>("/api/instances", { method: "POST", body: JSON.stringify({ name, base_url, token }) }),
+  removeInstance: (id: number) => request<{ ok: boolean }>(`/api/instances/${id}`, { method: "DELETE" }),
+  instancesSummary: () => request<{ instances: SlaveInstanceStatus[] }>("/api/instances/summary"),
+  triggerRemotePrefill: (id: number, service: "steam" | "battlenet" | "epic") =>
+    request<RemotePrefillResult>(`/api/instances/${id}/prefill/${service}`, { method: "POST" }),
 };
 
 export function prefillStreamUrl(service: "steam" | "battlenet" | "epic"): string {

@@ -21,6 +21,8 @@ from app.routers import (
     export_import,
     ha,
     health,
+    instance_tokens,
+    instances,
     metrics,
     prefill,
     public_display,
@@ -90,6 +92,8 @@ app.include_router(client_labels.router)
 app.include_router(ha.router)
 app.include_router(webpush.router)
 app.include_router(audit_log.router)
+app.include_router(instance_tokens.router)
+app.include_router(instances.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "static"
 

@@ -7,6 +7,7 @@ import {
   Rocket,
   Database,
   ScrollText,
+  Server,
   Settings as SettingsIcon,
   Sun,
   Moon,
@@ -36,6 +37,7 @@ export function Layout() {
     // Admin-only: the page itself also enforces this (backend returns 403
     // for a viewer), this just avoids advertising a link a viewer can't use.
     ...(isAdmin ? [{ to: "/audit-log", label: t("nav.auditLog"), icon: ScrollText }] : []),
+    ...(isAdmin ? [{ to: "/instances", label: t("nav.instances"), icon: Server }] : []),
     { to: "/settings", label: t("nav.settings"), icon: SettingsIcon },
   ];
 

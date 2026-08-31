@@ -167,6 +167,33 @@ _SCHEMA_STATEMENTS = [
         client_ip TEXT NOT NULL
     )
     """,
+    # Write-scoped instance tokens this instance hands out for the
+    # master-slave system (4th feature round, Welle 4) -- see
+    # instance_token_store.py. Same shape as api_tokens above, deliberately
+    # a separate table rather than a shared one (see that module's own
+    # docstring for why the two token types must never be interchangeable).
+    """
+    CREATE TABLE IF NOT EXISTS instance_tokens (
+        id SERIAL PRIMARY KEY,
+        label TEXT NOT NULL,
+        token_hash TEXT UNIQUE NOT NULL,
+        created_date TEXT NOT NULL
+    )
+    """,
+    # This instance's registry of remote slave instances it controls (4th
+    # feature round, Welle 4) -- see slave_instance_store.py. encrypted_token
+    # is the OTHER instance's instance token, Fernet-encrypted the same way
+    # app_settings' secrets are, one row per registered slave (unlike
+    # app_settings' fixed single row).
+    """
+    CREATE TABLE IF NOT EXISTS slave_instances (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        encrypted_token BYTEA NOT NULL,
+        created_date TEXT NOT NULL
+    )
+    """,
 ]
 
 # Run unconditionally, after _SCHEMA_STATEMENTS, on every startup -- each

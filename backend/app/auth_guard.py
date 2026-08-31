@@ -93,18 +93,56 @@ Since the 4th feature round (Welle 2), three more checks live here:
    registry (user logged it out from Settings' "active sessions" list, or
    via /api/auth/logout) is treated exactly like `not_authenticated`, even
    though the cookie's own signature still checks out.
+
+Also since the 4th feature round (Welle 4): a third Bearer credential type,
+an INSTANCE token (see services/instance_token_store.py), for the
+master-slave system. Routed separately from the plain API-token check
+above via its fixed TOKEN_PREFIX, checked first -- a token carrying that
+prefix is NEVER given the API-token/viewer treatment, even if somehow also
+present in api_token_store's table (which normal token creation can't
+produce anyway, see that module's own docstring). An instance token gets a
+small, fixed ALLOWLIST of exact paths (_INSTANCE_ALLOWED_GET_PATHS for
+reads, plus POST .../prefill/{service}/run) rather than the broad
+"anything GET" a viewer session or plain API token gets -- critically, this
+means an instance token can NOT read GET /api/settings (decrypted secrets)
+or manage anything, unlike a plain API token which is only blocked from
+/api/tokens and /api/settings specifically. See routers/instance_tokens.py
+and routers/instances.py, both of which are also added to
+_BEARER_EXEMPT_PREFIXES below so neither token type can reach instance
+*management* itself -- same "leaked read/write token can't mint itself
+more tokens" reasoning as /api/tokens already gets.
 """
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from app.services import api_token_store, app_settings_store, auth_credentials_store, ip_allowlist, session_registry_store, token_rate_limit
+from app.services import (
+    api_token_store,
+    app_settings_store,
+    auth_credentials_store,
+    instance_token_store,
+    ip_allowlist,
+    session_registry_store,
+    token_rate_limit,
+)
 
 _EXEMPT_PREFIX = "/api/auth/"
 _SETUP_EXEMPT_PATHS = {"/api/backup/restore"}
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-_BEARER_EXEMPT_PREFIXES = ("/api/tokens", "/api/settings")
+_BEARER_EXEMPT_PREFIXES = ("/api/tokens", "/api/settings", "/api/instance-tokens", "/api/instances")
+
+# Exact paths an instance token may GET -- read-only status only, deliberately
+# NOT a prefix match against e.g. /api/dashboard/ as a whole (that would also
+# cover /api/dashboard/trends, more history than this narrow scope should
+# expose) and NOT /api/settings (decrypted secrets, see module docstring).
+_INSTANCE_ALLOWED_GET_PATHS = {"/api/ha/sensors", "/api/dashboard/stats"}
+
+
+def _instance_token_allowed(method: str, path: str) -> bool:
+    if method in _SAFE_METHODS:
+        return path in _INSTANCE_ALLOWED_GET_PATHS
+    return method == "POST" and path.startswith("/api/prefill/") and path.endswith("/run")
 
 
 def _client_ip(request: Request) -> str:
@@ -118,8 +156,18 @@ class AuthGuardMiddleware(BaseHTTPMiddleware):
         if not path.startswith("/api/"):
             return await call_next(request)
 
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            raw_token = auth_header.removeprefix("Bearer ").strip()
+            if raw_token.startswith(instance_token_store.TOKEN_PREFIX):
+                instance_token_id = instance_token_store.identify_token(raw_token) if raw_token else None
+                if instance_token_id is None:
+                    return JSONResponse({"detail": "invalid_instance_token"}, status_code=401)
+                if not _instance_token_allowed(request.method, path):
+                    return JSONResponse({"detail": "forbidden_scope"}, status_code=403)
+                return await call_next(request)
+
         if not path.startswith(_BEARER_EXEMPT_PREFIXES):
-            auth_header = request.headers.get("authorization", "")
             if auth_header.startswith("Bearer "):
                 raw_token = auth_header.removeprefix("Bearer ").strip()
                 token_id = api_token_store.identify_token(raw_token) if raw_token else None
