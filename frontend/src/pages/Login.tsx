@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Database, Fingerprint, LogIn, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
+import { api, type OidcStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { isPasskeySupported, isUserCancelled, loginWithPasskey } from "@/lib/webauthn";
@@ -18,6 +18,27 @@ export function Login() {
   const [totpRequired, setTotpRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [oidcStatus, setOidcStatus] = useState<OidcStatus | null>(null);
+
+  useEffect(() => {
+    api.oidcStatus().then(setOidcStatus).catch(() => setOidcStatus(null));
+
+    // Landed back here from GET /api/auth/oidc/callback -- a successful
+    // login redirects straight to "/" with no query param (refresh() below
+    // then picks it up via the normal auth-status poll), only a failure
+    // appends one of these for the login page to surface as a toast.
+    const params = new URLSearchParams(window.location.search);
+    const oidcResult = params.get("oidc_login");
+    if (oidcResult === "failed" || oidcResult === "no_account") {
+      toast.error(oidcResult === "no_account" ? t("login.oidcLoginNoAccount") : t("login.oidcLoginFailed"));
+      window.history.replaceState({}, "", "/");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleOidcLogin() {
+    window.location.href = "/api/auth/oidc/login";
+  }
 
   async function handlePasskeyLogin() {
     setPasskeyBusy(true);
@@ -143,17 +164,28 @@ export function Login() {
                     {submitting ? t("login.submitting") : t("login.submit")}
                   </Button>
                 </form>
-                {isPasskeySupported() && (
+                {(isPasskeySupported() || oidcStatus?.enabled) && (
                   <>
                     <div className="my-4 flex items-center gap-3 text-xs text-[var(--muted)]">
                       <div className="h-px flex-1 bg-[var(--border)]" />
                       {t("login.orDivider")}
                       <div className="h-px flex-1 bg-[var(--border)]" />
                     </div>
-                    <Button type="button" variant="outline" className="w-full" onClick={handlePasskeyLogin} disabled={passkeyBusy}>
-                      <Fingerprint className="h-4 w-4" />
-                      {passkeyBusy ? t("login.passkeySubmitting") : t("login.passkeyLogin")}
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      {isPasskeySupported() && (
+                        <Button type="button" variant="outline" className="w-full" onClick={handlePasskeyLogin} disabled={passkeyBusy}>
+                          <Fingerprint className="h-4 w-4" />
+                          {passkeyBusy ? t("login.passkeySubmitting") : t("login.passkeyLogin")}
+                        </Button>
+                      )}
+                      {oidcStatus?.enabled && (
+                        <Button type="button" variant="outline" className="w-full" onClick={handleOidcLogin}>
+                          <LogIn className="h-4 w-4" />
+                          {t("login.oidcLoginPrefix")}
+                          {oidcStatus.provider_name}
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </CardContent>

@@ -37,5 +37,14 @@ class Settings:
     battlenet_prefill_container: str = os.environ.get("BATTLENET_PREFILL_CONTAINER", "battlenet-prefill")
     epic_prefill_container: str = os.environ.get("EPIC_PREFILL_CONTAINER", "epic-prefill")
 
+    # Panel SSO login via a generic OIDC provider (see services/oidc_client.py
+    # for why these are plain env vars rather than app_settings_store.py
+    # settings). Blank issuer/client_id/client_secret = feature entirely off,
+    # same "blank = off" contract as every other optional integration here.
+    oidc_issuer_url: str = os.environ.get("OIDC_ISSUER_URL", "").rstrip("/")
+    oidc_client_id: str = os.environ.get("OIDC_CLIENT_ID", "")
+    oidc_client_secret: str = os.environ.get("OIDC_CLIENT_SECRET", "")
+    oidc_provider_name: str = os.environ.get("OIDC_PROVIDER_NAME", "authentik")
+
 
 settings = Settings()

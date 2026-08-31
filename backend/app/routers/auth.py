@@ -10,6 +10,7 @@ from app.services import (
     audit_log_store,
     auth_credentials_store,
     login_rate_limit,
+    oidc_client,
     session_registry_store,
     steam_openid,
     webauthn_credential_store,
@@ -424,3 +425,115 @@ def steam_callback(request: Request):
         return RedirectResponse("/settings?steam_login=success")
     except steam_openid.SteamOpenIdError:
         return RedirectResponse("/settings?steam_login=failed")
+
+
+def _oidc_redirect_uri(request: Request) -> str:
+    return f"{str(request.base_url).rstrip('/')}/api/auth/oidc/callback"
+
+
+@router.get(
+    "/oidc/status",
+    summary="Whether panel SSO login is configured",
+    description="Whether OIDC login is configured (OIDC_ISSUER_URL/OIDC_CLIENT_ID/OIDC_CLIENT_SECRET all set) "
+    "and, if so, the display name for the login button -- no secrets in the response, safe to call without "
+    "a session (the login page itself needs this before anyone is authenticated).",
+)
+def oidc_status():
+    return {"enabled": oidc_client.is_enabled(), "provider_name": oidc_client.provider_name()}
+
+
+@router.get(
+    "/oidc/login",
+    summary="Start a panel SSO login",
+    description="Redirects to the configured identity provider's own login page. Always exempt from "
+    "AuthGuardMiddleware like the rest of /api/auth/*, and reachable even before any panel account exists "
+    "(see /oidc/callback's own docstring for why that matters).",
+)
+def oidc_login(request: Request):
+    if not oidc_client.is_enabled():
+        raise HTTPException(status_code=404, detail="OIDC ist nicht konfiguriert.")
+    try:
+        auth_request = oidc_client.build_authorization_request(_oidc_redirect_uri(request))
+    except oidc_client.OidcError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    # Stashed in the pre-login session -- same "not authenticated yet, but
+    # this browser's cookie already carries short-lived state across the
+    # redirect round-trip" pattern as pending_totp_username above. CSRF
+    # protection comes from `state` only being readable back out of THIS
+    # browser's own signed cookie, not from any secrecy of the value itself.
+    request.session["oidc_state"] = auth_request["state"]
+    request.session["oidc_nonce"] = auth_request["nonce"]
+    request.session["oidc_code_verifier"] = auth_request["code_verifier"]
+    return RedirectResponse(auth_request["url"])
+
+
+@router.get(
+    "/oidc/callback",
+    summary="Panel SSO login callback",
+    description="Exempt from the 'setup_required' block on an unconfigured instance (like POST "
+    "/api/auth/setup itself) so the very first login on a fresh panel can be an OIDC one -- see "
+    "auth_guard.py's unconditional /api/auth/* exemption, which already covers this path.",
+)
+def oidc_callback(request: Request):
+    client_ip = _client_ip(request)
+    error = request.query_params.get("error")
+    if error:
+        audit_log_store.log("oidc_login_failed", None, f"Provider returned error: {error}", client_ip)
+        return RedirectResponse("/?oidc_login=failed")
+
+    expected_state = request.session.pop("oidc_state", None)
+    nonce = request.session.pop("oidc_nonce", None)
+    code_verifier = request.session.pop("oidc_code_verifier", None)
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+
+    if not code or not state or not expected_state or state != expected_state or not nonce or not code_verifier:
+        audit_log_store.log("oidc_login_failed", None, "Missing or mismatched state/code", client_ip)
+        return RedirectResponse("/?oidc_login=failed")
+
+    try:
+        claims = oidc_client.complete_login(code, _oidc_redirect_uri(request), code_verifier, nonce)
+    except oidc_client.OidcError as exc:
+        audit_log_store.log("oidc_login_failed", None, str(exc), client_ip)
+        return RedirectResponse("/?oidc_login=failed")
+
+    username = oidc_client.username_from_claims(claims)
+    if not username:
+        audit_log_store.log("oidc_login_failed", None, "ID token had no usable username claim", client_ip)
+        return RedirectResponse("/?oidc_login=failed")
+
+    if not auth_credentials_store.is_configured():
+        # First-run bootstrap, same trust model as POST /api/auth/setup:
+        # whoever completes a valid login first on a totally unconfigured
+        # instance claims it. The account gets a random, never-surfaced
+        # password (nobody is ever meant to log in with it) rather than no
+        # password at all, since auth_credentials_store's schema always
+        # carries a password_hash -- this account is OIDC-only until an
+        # admin explicitly adds a second, password-based account for
+        # themselves from Settings, which they can do once logged in here.
+        auth_credentials_store.set_credentials(username, secrets.token_urlsafe(32))
+        user = auth_credentials_store.get_user(username)
+        login_rate_limit.record_success(client_ip)
+        _start_session(request, username, user["role"])
+        audit_log_store.log("setup", username, "Initial admin account created via OIDC", client_ip)
+        audit_log_store.log("oidc_login_success", username, "Logged in (first-run bootstrap)", client_ip)
+        return RedirectResponse("/")
+
+    user = auth_credentials_store.get_user(username)
+    if user is None:
+        # Accounts already exist, but none match this OIDC identity --
+        # deliberately NOT auto-provisioned (unlike the bootstrap case
+        # above): once a panel is configured, only an already-authenticated
+        # admin creating a new account (see routers/users.py) should be
+        # able to grant panel access, never a login attempt by itself.
+        audit_log_store.log("oidc_login_failed", username, "No matching panel account", client_ip)
+        return RedirectResponse("/?oidc_login=no_account")
+
+    # Role stays whatever the existing CachePanel account already has --
+    # the identity provider authenticates WHO this is, not what they're
+    # allowed to do here; CachePanel keeps deciding that itself.
+    login_rate_limit.record_success(client_ip)
+    _start_session(request, username, user["role"])
+    audit_log_store.log("oidc_login_success", username, "Logged in", client_ip)
+    return RedirectResponse("/")

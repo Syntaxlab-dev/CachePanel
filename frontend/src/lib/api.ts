@@ -346,6 +346,11 @@ export interface AuthStatus {
   totp_enabled: boolean;
 }
 
+export interface OidcStatus {
+  enabled: boolean;
+  provider_name: string;
+}
+
 export interface LoginResult {
   ok: boolean;
   totp_required: boolean;
@@ -512,6 +517,8 @@ export const api = {
   authLoginTotp: (code: string) =>
     request<{ ok: boolean }>("/api/auth/login/totp", { method: "POST", body: JSON.stringify({ code }) }),
   authLogout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+
+  oidcStatus: () => request<OidcStatus>("/api/auth/oidc/status"),
 
   totpSetup: () => request<TotpSetupResult>("/api/auth/totp/setup", { method: "POST" }),
   totpConfirm: (code: string) =>

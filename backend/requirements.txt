@@ -14,3 +14,4 @@ pyotp==2.9.0
 pywebpush==2.0.3
 webauthn==3.0.0
 paramiko==5.0.0
+joserfc==1.7.5

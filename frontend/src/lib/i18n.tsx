@@ -223,6 +223,9 @@ const dictionaries = {
     "login.passkeyLogin": "Mit Passkey anmelden",
     "login.passkeySubmitting": "Prüft…",
     "login.passkeyFailed": "Passkey-Anmeldung fehlgeschlagen",
+    "login.oidcLoginPrefix": "Mit ",
+    "login.oidcLoginFailed": "SSO-Anmeldung fehlgeschlagen.",
+    "login.oidcLoginNoAccount": "Kein passendes Konto für diese SSO-Identität gefunden.",
 
     "common.unknownError": "Unbekannter Fehler",
     "common.loading": "Lädt…",
@@ -900,6 +903,9 @@ const dictionaries = {
     "login.passkeyLogin": "Sign in with a passkey",
     "login.passkeySubmitting": "Verifying…",
     "login.passkeyFailed": "Passkey sign-in failed",
+    "login.oidcLoginPrefix": "Sign in with ",
+    "login.oidcLoginFailed": "SSO sign-in failed.",
+    "login.oidcLoginNoAccount": "No matching account found for that SSO identity.",
 
     "common.unknownError": "Unknown error",
     "common.loading": "Loading…",
