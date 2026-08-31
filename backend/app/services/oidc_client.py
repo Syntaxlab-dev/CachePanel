@@ -161,7 +161,6 @@ def _validate_id_token(discovery: dict, id_token: str, nonce: str) -> dict:
         raise OidcError(f"ID token signature validation failed: {exc}") from exc
 
     claims_registry = jwt.JWTClaimsRegistry(
-        iss={"essential": True, "value": settings.oidc_issuer_url},
         aud={"essential": True, "value": settings.oidc_client_id},
         exp={"essential": True},
     )
@@ -169,6 +168,15 @@ def _validate_id_token(discovery: dict, id_token: str, nonce: str) -> dict:
         claims_registry.validate(token.claims)
     except Exception as exc:
         raise OidcError(f"ID token claims validation failed: {exc}") from exc
+
+    # `iss` checked separately, trailing-slash-normalized on both sides --
+    # settings.oidc_issuer_url is stored without one (see settings.py), but
+    # a real provider's own issuer often has one (e.g. Authentik's
+    # per-provider issuer is always "{base}/application/o/{slug}/"), so a
+    # strict ClaimsRegistry value match would reject every real token.
+    actual_issuer = str(token.claims.get("iss") or "").rstrip("/")
+    if actual_issuer != settings.oidc_issuer_url.rstrip("/"):
+        raise OidcError(f"ID token issuer mismatch: expected {settings.oidc_issuer_url!r}, got {actual_issuer!r}.")
 
     if token.claims.get("nonce") != nonce:
         raise OidcError("ID token nonce mismatch -- possible replay of an old login attempt.")
