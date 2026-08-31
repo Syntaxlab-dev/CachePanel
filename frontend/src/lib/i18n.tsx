@@ -51,6 +51,10 @@ const dictionaries = {
     "dashboard.recentActivity": "Letzte Aktivität",
     "dashboard.noActivity": "Noch keine Download-Aktivität aufgezeichnet.",
     "dashboard.noRecentActivity": "Keine Aktivität in den letzten Log-Einträgen.",
+    "dashboard.upcomingReleases": "Anstehende Releases",
+    "dashboard.upcomingReleasesTooltip":
+      "Beliebte anstehende Steam-Releases der nächsten 60 Tage — reine Planungshilfe, kein automatisches Vor-Cachen: unveröffentlichte Spiele haben noch keine cachebaren Daten.",
+    "dashboard.upcomingReleases.none": "Keine anstehenden Releases mit festem Datum in den nächsten 60 Tagen gefunden.",
     "dashboard.topClients": "Top-Clients",
     "dashboard.noClients": "Noch keine Client-Daten aufgezeichnet.",
     "dashboard.clientRequests": "Anfragen",
@@ -731,6 +735,10 @@ const dictionaries = {
     "dashboard.recentActivity": "Recent activity",
     "dashboard.noActivity": "No download activity recorded yet.",
     "dashboard.noRecentActivity": "No activity in the recent log entries.",
+    "dashboard.upcomingReleases": "Upcoming releases",
+    "dashboard.upcomingReleasesTooltip":
+      "Popular upcoming Steam releases in the next 60 days — a planning aid only, not automatic pre-caching: an unreleased game has no cacheable data yet.",
+    "dashboard.upcomingReleases.none": "No upcoming releases with a firm date found in the next 60 days.",
     "dashboard.topClients": "Top clients",
     "dashboard.noClients": "No client data recorded yet.",
     "dashboard.clientRequests": "Requests",

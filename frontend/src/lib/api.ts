@@ -194,6 +194,14 @@ export interface DailyStat {
   total_requests: number;
 }
 
+export interface UpcomingRelease {
+  app_id: number;
+  name: string;
+  release_date: string;
+  header_image: string;
+  store_url: string;
+}
+
 export interface HaSensors {
   hit_ratio_percent: number;
   bandwidth_saved_gb: number;
@@ -567,6 +575,9 @@ export const api = {
 
   liveTicker: () => request<{ entries: LiveTickerEntry[] }>("/api/dashboard/live-ticker"),
   trends: (days: number = 30) => request<{ days: DailyStat[] }>(`/api/dashboard/trends?days=${days}`),
+
+  upcomingReleases: () =>
+    request<{ releases: UpcomingRelease[] }>("/api/dashboard/upcoming-releases"),
   haSensors: () => request<HaSensors>("/api/ha/sensors"),
 
   webpushVapidPublicKey: () => request<{ public_key: string }>("/api/webpush/vapid-public-key"),

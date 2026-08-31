@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 
-from app.services import daily_stats_store
+from app.services import daily_stats_store, upcoming_releases
 from app.services.log_parser import (
     TRAFFIC_WINDOWS,
     aggregate_service_stats,
@@ -92,3 +92,16 @@ def get_live_ticker():
 )
 def get_trends(days: int = Query(30, ge=1, le=365)):
     return {"days": daily_stats_store.get_range(days)}
+
+
+@router.get(
+    "/upcoming-releases",
+    summary="Upcoming Steam releases (planning aid, not pre-caching)",
+    description="Popular upcoming Steam titles with a firm release date in the next `days` days (default 60, "
+    "capped at 60) -- purely informational: an unreleased game has no cacheable depot data yet, this is for "
+    "an admin to plan around a launch day, not an automatic pre-cache trigger. Cached for a few hours "
+    "server-side (see services/upcoming_releases.py); an empty list can mean either no matching titles or a "
+    "temporarily unreachable data source, not distinguished here since neither needs different handling.",
+)
+def get_upcoming_releases(days: int = Query(60, ge=1, le=60)):
+    return {"releases": upcoming_releases.get_upcoming_releases(days)}

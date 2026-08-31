@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowDownCircle,
   ArrowUp,
+  CalendarClock,
   CheckCircle2,
   Circle,
   Download,
@@ -52,6 +53,7 @@ import {
   type RunHistoryEntry,
   type ScheduleConfig,
   type TrafficWindow,
+  type UpcomingRelease,
 } from "@/lib/api";
 import { formatBytes, formatDaysApprox, formatPercent, formatUptime, cn } from "@/lib/utils";
 import { downloadCsv } from "@/lib/csv";
@@ -110,6 +112,7 @@ export function Dashboard() {
   const [checklistSettings, setChecklistSettings] = useState<AppSettings | null>(null);
   const [checklistSchedule, setChecklistSchedule] = useState<ScheduleConfig | null>(null);
   const [checklistWebpush, setChecklistWebpush] = useState(false);
+  const [upcomingReleases, setUpcomingReleases] = useState<UpcomingRelease[] | null>(null);
 
   const loadAll = useCallback(
     (window: TrafficWindow) => {
@@ -187,6 +190,15 @@ export function Dashboard() {
       .then((data) => setTrends(data.days))
       .catch(() => setTrends(null));
   }, [trendsRange]);
+
+  // Server-cached for hours (see services/upcoming_releases.py) -- fetched
+  // once on mount, not tied to any refresh cadence, same reasoning as trends.
+  useEffect(() => {
+    api
+      .upcomingReleases()
+      .then((data) => setUpcomingReleases(data.releases))
+      .catch(() => setUpcomingReleases(null));
+  }, []);
 
   // Auto-refresh: paused while the user is actively rearranging tiles in
   // "Anpassen" mode (a refresh mid-drag wouldn't lose the layout itself --
@@ -982,6 +994,53 @@ export function Dashboard() {
       </Card>
     ),
   };
+
+  if (upcomingReleases) {
+    widgetDefs.upcomingReleases = {
+      title: t("dashboard.upcomingReleases"),
+      node: (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarClock className="h-4 w-4" /> {t("dashboard.upcomingReleases")}
+              <InfoTooltip text={t("dashboard.upcomingReleasesTooltip")} />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {upcomingReleases.length === 0 ? (
+              <p className="text-sm text-[var(--muted)]">{t("dashboard.upcomingReleases.none")}</p>
+            ) : (
+              <div className="flex flex-col divide-y divide-[var(--border)]">
+                {upcomingReleases.slice(0, 8).map((r) => (
+                  <a
+                    key={r.app_id}
+                    href={r.store_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 rounded px-1 py-2.5 text-sm hover:bg-[var(--surface-2)]"
+                  >
+                    <img
+                      src={r.header_image}
+                      alt=""
+                      className="h-9 w-16 shrink-0 rounded object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
+                      }}
+                    />
+                    <span className="flex-1 truncate">{r.name}</span>
+                    <span className="shrink-0 text-[var(--muted)]">
+                      {new Date(r.release_date).toLocaleDateString(locale, { month: "short", day: "numeric" })}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ),
+    };
+  }
 
   return (
     <div className="flex flex-col gap-6">
