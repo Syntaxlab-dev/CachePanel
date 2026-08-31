@@ -36,4 +36,12 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/metrics', timeout=3)" || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --proxy-headers: trust X-Forwarded-Proto/X-Forwarded-For from upstream
+# (NPM is the only thing that ever talks to this container directly, over
+# the Docker-internal network) so request.base_url/request.url.scheme
+# reflect the real public https:// URL instead of the plain-http one this
+# container actually sees. Without it, anything building an absolute
+# callback URL from the request (Steam OpenID's return_to/realm, OIDC
+# SSO's redirect_uri) generates an http:// URL that a strict redirect_uri
+# check -- like an OIDC provider's -- will reject outright.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]
